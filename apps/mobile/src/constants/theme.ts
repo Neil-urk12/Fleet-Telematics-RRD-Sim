@@ -1,32 +1,52 @@
-// Color tokens following DESIGN.md and existing mobile styling
+// Theme tokens aligned with DESIGN.md
 export const colors = {
-  bgBase: "#f8fafc",
-  bgSurface: "#ffffff",
-  border: "#e2e8f0",
-  borderSelected: "#2563eb",
-  bgSelected: "#eff6ff",
+  // Dark mode primary palette
+  bgBase: "#0D0D0D",
+  bgSurface: "#1A1A1A",
+  bgSurfaceAlt: "#242424",
+  border: "#2E2E2E",
+  borderSelected: "#2ECC71",
+  bgSelected: "#1B3A2A",
 
-  textPrimary: "#0f172a",
-  textSecondary: "#475569",
-  textMuted: "#64748b",
-  heading: "#334155",
+  // Typography
+  textPrimary: "#FFFFFF",
+  textSecondary: "#B3B3B3",
+  textMuted: "#7A7A7A",
+  heading: "#E5E7EB",
 
-  primary: "#2563eb",
-  primaryText: "#ffffff",
+  // Accents
+  primary: "#2ECC71",
+  accentPrimary: "#2ECC71",
+  accentPrimaryHover: "#27AE60",
+  accentPrimarySubtle: "#1B3A2A",
+  primaryText: "#FFFFFF",
 
-  badgeBg: "#e0f2fe",
-  badgeText: "#0284c7",
+  // Badges & Pills
+  badgeBg: "#1B3A2A",
+  badgeText: "#2ECC71",
 
-  // Risk levels
-  riskSafeBg: "#dcfce7",
-  riskSafeText: "#15803d",
-  riskCautionBg: "#fef9c3",
-  riskCautionText: "#a16207",
-  riskDangerBg: "#fee2e2",
-  riskDangerText: "#b91c1c",
+  // Status Colors (Route-Risk Classification)
+  riskSafe: "#2ECC71",
+  riskSafeText: "#2ECC71",
+  riskSafeBg: "#133E26",
+  riskCaution: "#F1C40F",
+  riskCautionText: "#F1C40F",
+  riskCautionBg: "#3D3408",
+  riskDanger: "#E74C3C",
+  riskDangerText: "#E74C3C",
+  riskDangerBg: "#401714",
+  info: "#3498DB",
+  infoText: "#3498DB",
+  infoBg: "#142F44",
+
+  // Bottom Navigation
+  navBg: "#111111",
+  navBorder: "#222222",
+  navActive: "#2ECC71",
+  navInactive: "#6B7280",
 
   // Error alert
-  errorBg: "#fee2e2",
-  errorText: "#991b1b",
-  errorButtonBg: "#b91c1c",
+  errorBg: "#3F1818",
+  errorText: "#FCA5A5",
+  errorButtonBg: "#DC2626",
 } as const;

@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@fleet/api-client": "workspace:*",
     "expo": "~57.0.22",
     "expo-constants": "^57.0.18",
