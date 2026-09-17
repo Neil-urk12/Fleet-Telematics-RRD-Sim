@@ -14,3 +14,25 @@ class VehicleBase(BaseModel):
 
 class Vehicle(VehicleBase):
     pass
+
+class VehicleCreate(VehicleBase):
+    """Payload for registering a new vehicle. All fields required except status."""
+    pass
+
+
+class VehicleUpdate(BaseModel):
+    """Payload for partial updates — every field optional."""
+    name: str | None = None
+    model: str | None = None
+    battery_capacity_kwh: float | None = None
+    baseline_efficiency_wh_km: float | None = None
+    current_soc: float | None = Field(default=None, ge=0.0, le=100.0)
+    current_soh: float | None = Field(default=None, ge=0.0, le=100.0)
+    status: str | None = None
+
+
+class VehicleHistoryEntry(BaseModel):
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    current_soc: float
+    current_soh: float
+    status: str
