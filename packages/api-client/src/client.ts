@@ -90,6 +90,10 @@ export class FleetApiClient {
     return this.fetchJson<Vehicle>(`/api/vehicles/${encodeURIComponent(vehicleId)}`);
   }
 
+  async getVehicleHistory(vehicleId: string): Promise<VehicleHistoryEntry[]> {
+    return this.fetchJson<VehicleHistoryEntry[]>(`/api/vehicles/${encodeURIComponent(vehicleId)}/history`);
+  }
+
   // Telemetry
   async getLatestTelemetry(vehicleId: string): Promise<TelemetryResponse> {
     return this.fetchJson<TelemetryResponse>(`/api/telemetry/${encodeURIComponent(vehicleId)}/latest`);
