@@ -11,6 +11,34 @@ export interface Vehicle {
   status: VehicleStatus;
 }
 
+export interface VehicleCreate {
+  id: string;
+  name: string;
+  model: string;
+  battery_capacity_kwh: number;
+  baseline_efficiency_wh_km: number;
+  current_soc: number;
+  current_soh: number;
+  status?: VehicleStatus;
+}
+
+export interface VehicleUpdate {
+  name?: string;
+  model?: string;
+  battery_capacity_kwh?: number;
+  baseline_efficiency_wh_km?: number;
+  current_soc?: number;
+  current_soh?: number;
+  status?: VehicleStatus;
+}
+
+export interface VehicleHistoryEntry {
+  timestamp: string;
+  current_soc: number;
+  current_soh: number;
+  status: VehicleStatus;
+}
+
 export interface TelemetryEvent {
   vehicle_id: string;
   timestamp?: string;
