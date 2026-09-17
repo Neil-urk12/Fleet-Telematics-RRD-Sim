@@ -4,6 +4,9 @@ import type {
   TelemetryEvent,
   TelemetryResponse,
   Vehicle,
+  VehicleCreate,
+  VehicleUpdate,
+  VehicleHistoryEntry,
 } from "./types";
 
 export interface FleetApiClientConfig {
@@ -50,6 +53,37 @@ export class FleetApiClient {
   // Vehicles
   async getVehicles(): Promise<Vehicle[]> {
     return this.fetchJson<Vehicle[]>("/api/vehicles/");
+  }
+
+  async createVehicle(payload: VehicleCreate): Promise<Vehicle> {
+    return this.fetchJson<Vehicle>("/api/vehicles/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateVehicle(vehicleId: string, payload: VehicleUpdate): Promise<Vehicle> {
+    return this.fetchJson<Vehicle>(`/api/vehicles/${encodeURIComponent(vehicleId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteVehicle(vehicleId: string): Promise<void> {
+    const url = `${this.baseUrl}/api/vehicles/${encodeURIComponent(vehicleId)}`;
+    const res = await fetch(url, { method: "DELETE" });
+    if (!res.ok && res.status !== 204) {
+      let errorMessage = `API error ${res.status}: ${res.statusText}`;
+      try {
+        const errorBody = await res.json();
+        if (errorBody?.detail) {
+          errorMessage = typeof errorBody.detail === "string" ? errorBody.detail : JSON.stringify(errorBody.detail);
+        }
+      } catch {
+        // Fall back to status text
+      }
+      throw new Error(errorMessage);
+    }
   }
 
   async getVehicle(vehicleId: string): Promise<Vehicle> {

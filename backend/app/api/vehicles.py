@@ -1,6 +1,10 @@
 from fastapi import APIRouter, HTTPException
-
-from app.schemas.vehicle import Vehicle
+from app.schemas.vehicle import (
+    Vehicle,
+    VehicleCreate,
+    VehicleHistoryEntry,
+    VehicleUpdate,
+)
 
 router = APIRouter()
 
