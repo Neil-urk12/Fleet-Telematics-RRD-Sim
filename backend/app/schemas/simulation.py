@@ -1,4 +1,6 @@
+from datetime import UTC, datetime
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -29,8 +31,10 @@ class SimulationResponse(BaseModel):
     confidence_score_pct: float
     recommendations: list[str]
 
+
 class SimulationRecord(BaseModel):
     """A stored simulation run — request + result, for history lookups."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     request: SimulationRequest
@@ -39,6 +43,7 @@ class SimulationRecord(BaseModel):
 
 class BatchSimulationRequest(BaseModel):
     """Run the same route/conditions against multiple vehicles (or the whole fleet)."""
+
     vehicle_ids: list[str] | None = Field(
         default=None, description="Vehicles to evaluate; omit to run against the entire fleet"
     )
@@ -64,6 +69,7 @@ class BatchSimulationResponse(BaseModel):
 
 class SimulationConfig(BaseModel):
     """One named configuration to evaluate in a comparison run."""
+
     label: str = Field(..., description="Display label for this config, e.g. 'Eco + AC off'")
     hvac_mode: Literal["OFF", "LOW", "MEDIUM", "HIGH"] = Field(default="MEDIUM")
     driving_style: Literal["ECO", "NORMAL", "AGGRESSIVE"] = Field(default="NORMAL")
