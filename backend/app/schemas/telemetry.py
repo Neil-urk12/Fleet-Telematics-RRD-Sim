@@ -20,3 +20,23 @@ class TelemetryResponse(BaseModel):
     success: bool
     message: str
     data: TelemetryEvent | None = None
+
+
+class BatchTelemetryRequest(BaseModel):
+    events: list[TelemetryEvent] = Field(..., min_length=1, description="Telemetry snapshots to ingest")
+
+
+class BatchTelemetryResult(BaseModel):
+    vehicle_id: str
+    success: bool
+    message: str
+
+
+class BatchTelemetryResponse(BaseModel):
+    results: list[BatchTelemetryResult]
+
+
+class FleetTelemetryResponse(BaseModel):
+    success: bool
+    message: str
+    data: dict[str, TelemetryEvent]
