@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { createFleetClient } from '@fleet/api-client';
 import type { Vehicle, TelemetryEvent, SimulationResponse, SimulationRequest } from '@fleet/api-client';
 import { MOCK_VEHICLES, MOCK_TELEMETRY } from '../mockData';
@@ -12,49 +12,45 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     const [simulation, setSimulation] = useState<SimulationResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [simulationError, setSimulationError] = useState<string | null>(null);
+    const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'cached'>('demo');
     const [isSimulating, setIsSimulating] = useState(false);
+    const fetching = useRef(false);
+    const hasBackendData = useRef(false);
 
     const fetchData = useCallback(async () => {
+        if (fetching.current) return;
+        fetching.current = true;
         try {
-            const vehicleList = await api.getVehicles();
-            if (vehicleList && vehicleList.length > 0) {
-                setVehicles(vehicleList);
-
-                const telemetryResults = await Promise.all(
-                    vehicleList.map(async (v) => {
-                        try {
-                            const res = await api.getLatestTelemetry(v.id);
-                            return { vehicleId: v.id, event: res.data };
-                        } catch {
-                            return { vehicleId: v.id, event: null };
-                        }
-                    })
-                );
-
-                const telemetryMap: Record<string, TelemetryEvent> = {};
-                for (const { vehicleId, event } of telemetryResults) {
-                    if (event) telemetryMap[vehicleId] = event;
-                }
-                if (Object.keys(telemetryMap).length > 0) {
-                    setTelemetry(prev => ({ ...prev, ...telemetryMap }));
-                }
-            }
-
+            const [vehicleList, fleetTelemetry] = await Promise.all([
+                api.getVehicles(), api.getFleetLatestTelemetry(),
+            ]);
+            const vehicleIds = new Set(vehicleList.map(vehicle => vehicle.id));
+            setVehicles(vehicleList);
+            setTelemetry(Object.fromEntries(
+                Object.entries(fleetTelemetry.data).filter(([id]) => vehicleIds.has(id))
+            ));
+            hasBackendData.current = true;
+            setDataStatus('live');
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to connect to fleet backend');
+            setDataStatus(hasBackendData.current ? 'cached' : 'demo');
         } finally {
+            fetching.current = false;
             setLoading(false);
         }
     }, []);
 
     const runSimulation = useCallback(async (req: SimulationRequest) => {
         setIsSimulating(true);
+        setSimulationError(null);
+        setSimulation(null);
         try {
             const result = await api.runSimulation(req);
             setSimulation(result);
         } catch (err) {
-            console.error('Simulation failed:', err);
+            setSimulationError(err instanceof Error ? err.message : 'Simulation failed');
         } finally {
             setIsSimulating(false);
         }
@@ -66,5 +62,8 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
         return () => clearInterval(interval);
     }, [fetchData, pollingIntervalMs]);
 
-    return { vehicles, telemetry, simulation, loading, error, isSimulating, refetch: fetchData, runSimulation };
+    return {
+        vehicles, telemetry, simulation, loading, error, simulationError, dataStatus,
+        isSimulating, refetch: fetchData, runSimulation,
+    };
 }

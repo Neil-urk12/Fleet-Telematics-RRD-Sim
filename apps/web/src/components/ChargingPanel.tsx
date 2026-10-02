@@ -1,3 +1,4 @@
+import { formatBatteryState } from '@fleet/api-client';
 import type { SimulationResponse } from '@fleet/api-client';
 
 interface ChargingPanelProps {
@@ -47,7 +48,7 @@ export function ChargingPanel({
             </div>
 
             {/* Simulation result HUD card for selected vehicle */}
-            {simulation && selectedVehicle && (
+            {simulation && selectedVehicle && simulation.vehicle_id === selectedVehicleId && (
                 <div className="sim-result-card" style={{ marginBottom: '8px' }}>
                     <div className="sim-result-header">
                         <span className="ctrl-label" style={{ color: '#00c2ff', fontWeight: 700 }}>
@@ -56,6 +57,10 @@ export function ChargingPanel({
                         <span className={`risk-badge risk-badge--${simulation.risk_level.toLowerCase()}`}>
                             {simulation.risk_level} MARGIN
                         </span>
+                    </div>
+                    <div className="sim-recommendation">
+                        {formatBatteryState(simulation)} · Starting SOC {simulation.starting_soc_pct.toFixed(1)}%
+                        {' / '}SOH {simulation.starting_soh_pct.toFixed(1)}%
                     </div>
                     <div className="sim-result-stats">
                         <div>

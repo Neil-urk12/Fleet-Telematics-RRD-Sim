@@ -1,4 +1,5 @@
 // src/components/FleetPanel.tsx
+import { formatBatteryState } from '@fleet/api-client';
 import type { Vehicle } from '@fleet/api-client';
 import { useState } from 'react';
 
@@ -88,6 +89,7 @@ function VehicleCard({
             </div>
 
             <span className="vehicle-model">{vehicle.model}</span>
+            <span className="vehicle-model">{formatBatteryState(vehicle)}</span>
 
 
             <div className="soc-bar-container">

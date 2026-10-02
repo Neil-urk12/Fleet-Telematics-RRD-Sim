@@ -98,9 +98,11 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, simulation, loading, error, isSimulating, runSimulation } = useFleetData();
+    const { vehicles, telemetry, simulation, loading, error, simulationError, dataStatus, isSimulating, runSimulation } = useFleetData();
 
-    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>('EV-001');
+    const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>('EV-001');
+    const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
+        ? requestedVehicleId : vehicles[0]?.id ?? null;
     const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
 
     // Playback and vehicle controls
@@ -217,17 +219,32 @@ function App() {
         });
     };
 
+    if (!loading && vehicles.length === 0) {
+        return (
+            <div className="dashboard">
+                {error && <div className="api-banner api-banner--error">Connection lost — showing cached fleet data. ({error})</div>}
+                <div className="api-banner">No vehicles registered.</div>
+            </div>
+        );
+    }
+
     return (
         <div className="dashboard">
             {/* ── Backend status banners ────────────────────────────────── */}
             {loading && (
                 <div className="api-banner api-banner--loading">
-                    Connecting to fleet backend…
+                    Connecting to fleet backend — showing demo data…
                 </div>
             )}
             {!loading && error && (
                 <div className="api-banner api-banner--error">
-                    ⚠ Backend unreachable — showing last known data. ({error})
+                    {dataStatus === 'demo' ? 'Offline demo data' : 'Connection lost — showing cached fleet data'}. ({error})
+                </div>
+            )}
+
+            {simulationError && (
+                <div className="api-banner api-banner--error" role="alert">
+                    Simulation unavailable: {simulationError}
                 </div>
             )}
 
