@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { FleetApiError } from "@fleet/api-client";
 import type { SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
 
 import { client, API_URL } from "./src/config/api";
@@ -62,27 +63,32 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fleetError, setFleetError] = useState<string | null>(null);
+  const [dataStatus, setDataStatus] = useState<"demo" | "live" | "cached">("demo");
+  const [simulationOrigin, setSimulationOrigin] = useState<"backend" | "local">("backend");
+  const hasBackendData = useRef(false);
+  const fetchingVehicles = useRef(false);
 
   useEffect(() => {
     loadVehicles();
   }, []);
 
   async function loadVehicles() {
+    if (fetchingVehicles.current) return;
+    fetchingVehicles.current = true;
     setLoading(true);
-    setError(null);
+    setFleetError(null);
     try {
       const data = await client.getVehicles();
-      if (data && data.length > 0) {
-        setVehicles(data);
-        setSelectedVehicle(data[0]);
-      }
-    } catch (err: any) {
-      console.warn("Backend not reachable, using mock fleet data:", err?.message);
-      // Keep fallbackVehicles so UI never breaks
-      if (!selectedVehicle) {
-        setSelectedVehicle(fallbackVehicles[0]);
-      }
+      setVehicles(data);
+      setSelectedVehicle(previous => data.find(vehicle => vehicle.id === previous?.id) ?? data[0] ?? null);
+      hasBackendData.current = true;
+      setDataStatus("live");
+    } catch (err) {
+      setFleetError(err instanceof Error ? err.message : "Failed to load fleet");
+      setDataStatus(hasBackendData.current ? "cached" : "demo");
     } finally {
+      fetchingVehicles.current = false;
       setLoading(false);
     }
   }
@@ -96,14 +102,26 @@ export default function App() {
   async function handleRunSimulation(params: SimulationRequest): Promise<SimulationResponse | null> {
     setLoading(true);
     setError(null);
+    setSimResult(null);
     try {
       const result = await client.runSimulation(params);
+      setSimulationOrigin("backend");
       setSimResult(result);
       return result;
-    } catch (err: any) {
-      console.warn("API simulation call failed, calculating local physics fallback:", err?.message);
+    } catch (err) {
+      if (err instanceof FleetApiError) {
+        setError(err.message);
+        return null;
+      }
+      setFleetError(err instanceof Error ? err.message : "Failed to connect to fleet backend");
+      setDataStatus(hasBackendData.current ? "cached" : "demo");
+      setError("Backend simulation unavailable; showing an offline demo estimate.");
       // Realistic physics approximation fallback if offline
       const vehicle = vehicles.find((v) => v.id === params.vehicle_id) || selectedVehicle || fallbackVehicles[0];
+      if (vehicle.battery_capacity_kwh <= 0 || vehicle.current_soh <= 0) {
+        setError("Vehicle has no usable battery capacity; route assessment is unavailable");
+        return null;
+      }
       const startSoc = vehicle.current_soc ?? 80;
       const baseKwhPerKm = (vehicle.baseline_efficiency_wh_km || 280) / 1000;
       
@@ -151,6 +169,7 @@ export default function App() {
         ],
       };
 
+      setSimulationOrigin("local");
       setSimResult(mockResponse);
       return mockResponse;
     } finally {
@@ -168,6 +187,12 @@ export default function App() {
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
         <StatusBar style="light" />
 
+        {dataStatus !== "live" && (
+          <Text style={styles.dataBanner} accessibilityRole="text">
+            {dataStatus === "demo" ? "Offline demo fleet data" : "Connection lost — showing cached fleet data"}
+            {fleetError ? ` · ${fleetError}` : ""}
+          </Text>
+        )}
         {/* Screen Container */}
         <View style={styles.content}>
           {currentTab === "dashboard" && (
@@ -185,7 +210,7 @@ export default function App() {
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
               loading={loading}
-              error={error}
+              error={fleetError}
               onSelectVehicle={setSelectedVehicle}
               onRefresh={handleRefresh}
               onSimulateWithVehicle={handleSimulateWithVehicle}
@@ -200,6 +225,7 @@ export default function App() {
               onSelectVehicle={setSelectedVehicle}
               onRunSimulation={handleRunSimulation}
               simResult={simResult}
+              simulationOrigin={simulationOrigin}
               loading={loading}
               error={error}
               refreshing={refreshing}
@@ -238,6 +264,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
+  },
+  dataBanner: {
+    color: colors.riskCautionText,
+    backgroundColor: colors.riskCautionBg,
+    padding: 10,
+    fontSize: 12,
   },
   content: {
     flex: 1,

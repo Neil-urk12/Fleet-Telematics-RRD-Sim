@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   vehicleList: {
-    maxHeight: 120,
+    maxHeight: 180,
     marginBottom: 16,
   },
 });

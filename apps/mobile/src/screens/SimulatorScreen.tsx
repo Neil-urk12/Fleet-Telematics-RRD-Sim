@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { formatBatteryState } from "@fleet/api-client";
 import type { SimulationResponse, Vehicle } from "@fleet/api-client";
 import { colors } from "../constants/theme";
 import { Header, SimulationResult, ErrorBanner } from "../components";
@@ -28,6 +29,7 @@ interface SimulatorScreenProps {
     reserve_soc_target_pct: number;
   }) => Promise<SimulationResponse | null>;
   simResult: SimulationResponse | null;
+  simulationOrigin?: "backend" | "local";
   loading: boolean;
   error: string | null;
   refreshing?: boolean;
@@ -40,6 +42,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
   onSelectVehicle,
   onRunSimulation,
   simResult,
+  simulationOrigin = "backend",
   loading,
   error,
   refreshing = false,
@@ -91,7 +94,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
         subtitle="Physics-based Energy & Risk Prediction"
       />
 
-      {error && <ErrorBanner message={error} onRetry={() => {}} />}
+      {error && <ErrorBanner message={error} onRetry={handleSimulate} />}
 
       {/* Target Vehicle Selector */}
       <View style={styles.sectionCard}>
@@ -123,6 +126,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
                 <Text style={styles.vehicleOptionSub}>
                   {v.battery_capacity_kwh}kWh • {v.current_soc}% SOC
                 </Text>
+                <Text style={styles.vehicleOptionSub}>{formatBatteryState(v)}</Text>
               </TouchableOpacity>
             );
           })}
@@ -296,9 +300,9 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
       </View>
 
       {/* Simulation Result Output */}
-      {simResult && (
+      {simResult && simResult.vehicle_id === activeVehicle?.id && (
         <View style={styles.resultWrapper}>
-          <SimulationResult result={simResult} />
+          <SimulationResult result={simResult} origin={simulationOrigin} />
         </View>
       )}
     </ScrollView>

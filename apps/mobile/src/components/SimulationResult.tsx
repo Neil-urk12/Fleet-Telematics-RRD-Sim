@@ -1,13 +1,15 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { formatBatteryState } from "@fleet/api-client";
 import type { SimulationResponse } from "@fleet/api-client";
 import { colors } from "../constants/theme";
 
 interface SimulationResultProps {
   result: SimulationResponse;
+  origin?: "backend" | "local";
 }
 
-export const SimulationResult: React.FC<SimulationResultProps> = ({ result }) => {
+export const SimulationResult: React.FC<SimulationResultProps> = ({ result, origin = "backend" }) => {
   const getBadgeStyle = () => {
     switch (result.risk_level) {
       case "SAFE":
@@ -32,7 +34,12 @@ export const SimulationResult: React.FC<SimulationResultProps> = ({ result }) =>
 
   return (
     <View style={styles.resultCard}>
-      <Text style={styles.resultTitle}>Simulation Feasibility</Text>
+      <Text style={styles.resultTitle}>Simulation Feasibility — {result.vehicle_id}</Text>
+      {origin === "local" && <Text style={styles.detailRow}>Offline demo estimate</Text>}
+      <Text style={styles.detailRow}>{formatBatteryState(result)}</Text>
+      <Text style={styles.detailRow}>
+        Starting SOC: {result.starting_soc_pct.toFixed(1)}% · SOH: {result.starting_soh_pct.toFixed(1)}%
+      </Text>
       <View style={[styles.riskBadge, getBadgeStyle()]}>
         <Text style={[styles.riskText, getTextStyle()]}>{result.risk_level}</Text>
       </View>

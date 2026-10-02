@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { formatBatteryState } from "@fleet/api-client";
 import type { Vehicle } from "@fleet/api-client";
 import { colors } from "../constants/theme";
 import { Header } from "../components";
@@ -28,13 +29,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   refreshing = false,
   onRefresh,
 }) => {
-  const totalVehicles = vehicles.length || 3;
-  const activeVehicles = vehicles.filter((v) => v.status === "ACTIVE").length || 2;
+  const totalVehicles = vehicles.length;
+  const activeVehicles = vehicles.filter((v) => v.status === "ACTIVE" || v.status === "IN_USE").length;
   const avgSoc = vehicles.length
     ? Math.round(
         vehicles.reduce((acc, v) => acc + (v.current_soc || 0), 0) / vehicles.length
       )
-    : 78;
+    : 0;
 
   return (
     <ScrollView
@@ -149,6 +150,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 <Text style={styles.vehicleRowModel}>
                   {vehicle.model} • {vehicle.battery_capacity_kwh} kWh
                 </Text>
+                <Text style={styles.vehicleRowModel}>{formatBatteryState(vehicle)}</Text>
               </View>
             </View>
 
