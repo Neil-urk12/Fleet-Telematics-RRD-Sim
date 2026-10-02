@@ -124,7 +124,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {(vehicles.length > 0 ? vehicles : mockVehicles).map((vehicle) => {
+      {vehicles.map((vehicle) => {
         const isLow = (vehicle.current_soc ?? 80) < 20;
         return (
           <TouchableOpacity
@@ -176,39 +176,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     </ScrollView>
   );
 };
-
-const mockVehicles: Vehicle[] = [
-  {
-    id: "v1",
-    name: "Delivery Van A",
-    model: "Ford E-Transit",
-    battery_capacity_kwh: 68,
-    baseline_efficiency_wh_km: 260,
-    current_soc: 82,
-    current_soh: 98,
-    status: "ACTIVE",
-  },
-  {
-    id: "v2",
-    name: "Freight Runner B",
-    model: "Rivian EDV 700",
-    battery_capacity_kwh: 135,
-    baseline_efficiency_wh_km: 380,
-    current_soc: 18,
-    current_soh: 96,
-    status: "ACTIVE",
-  },
-  {
-    id: "v3",
-    name: "Urban Cargo C",
-    model: "Mercedes eSprinter",
-    battery_capacity_kwh: 113,
-    baseline_efficiency_wh_km: 310,
-    current_soc: 94,
-    current_soh: 99,
-    status: "IDLE",
-  },
-];
 
 const styles = StyleSheet.create({
   scrollContent: {

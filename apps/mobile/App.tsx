@@ -25,6 +25,8 @@ const fallbackVehicles: Vehicle[] = [
     current_soc: 82,
     current_soh: 98,
     status: "ACTIVE",
+    state_source: "vehicle_defaults",
+    state_timestamp: null,
   },
   {
     id: "v-edv-02",
@@ -35,6 +37,8 @@ const fallbackVehicles: Vehicle[] = [
     current_soc: 44,
     current_soh: 96,
     status: "ACTIVE",
+    state_source: "vehicle_defaults",
+    state_timestamp: null,
   },
   {
     id: "v-sprinter-03",
@@ -45,6 +49,8 @@ const fallbackVehicles: Vehicle[] = [
     current_soc: 18,
     current_soh: 99,
     status: "IDLE",
+    state_source: "vehicle_defaults",
+    state_timestamp: null,
   },
 ];
 
@@ -128,6 +134,10 @@ export default function App() {
 
       const mockResponse: SimulationResponse = {
         vehicle_id: vehicle.id,
+        starting_soc_pct: vehicle.current_soc,
+        starting_soh_pct: vehicle.current_soh,
+        state_source: vehicle.state_source,
+        state_timestamp: vehicle.state_timestamp,
         usable_battery_capacity_kwh: vehicle.battery_capacity_kwh * 0.95,
         projected_arrival_soc_pct: Number(projectedArrivalSoc.toFixed(1)),
         estimated_energy_consumption_kwh: Number(estimatedConsumptionKwh.toFixed(1)),

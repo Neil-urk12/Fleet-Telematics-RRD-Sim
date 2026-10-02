@@ -1,6 +1,25 @@
 export type VehicleStatus = "AVAILABLE" | "CHARGING" | "MAINTENANCE" | "IN_USE" | string;
 
-export interface Vehicle {
+export type BatteryStateSource = "telemetry" | "vehicle_defaults" | "manual";
+
+export interface BatteryStateMetadata {
+  state_source: BatteryStateSource;
+  state_timestamp: string | null;
+}
+
+export function formatBatteryState(state: BatteryStateMetadata): string {
+  const labels: Record<BatteryStateSource, string> = {
+    telemetry: "Telemetry",
+    vehicle_defaults: "Vehicle defaults",
+    manual: "Manual update",
+  };
+  const label = labels[state.state_source] ?? "Source unavailable";
+  return state.state_timestamp
+    ? `${label} · ${new Date(state.state_timestamp).toLocaleString()}`
+    : label;
+}
+
+export interface Vehicle extends BatteryStateMetadata {
   id: string;
   name: string;
   model: string;
@@ -58,6 +77,26 @@ export interface TelemetryResponse {
   data?: TelemetryEvent | null;
 }
 
+export interface BatchTelemetryRequest {
+  events: TelemetryEvent[];
+}
+
+export interface BatchTelemetryResult {
+  vehicle_id: string;
+  success: boolean;
+  message: string;
+}
+
+export interface BatchTelemetryResponse {
+  results: BatchTelemetryResult[];
+}
+
+export interface FleetTelemetryResponse {
+  success: boolean;
+  message: string;
+  data: Record<string, TelemetryEvent>;
+}
+
 export type HvacMode = "OFF" | "LOW" | "MEDIUM" | "HIGH";
 export type DrivingStyle = "ECO" | "NORMAL" | "AGGRESSIVE";
 export type RegenLevel = "OFF" | "LOW" | "MEDIUM" | "HIGH";
@@ -75,8 +114,10 @@ export interface SimulationRequest {
   reserve_soc_target_pct?: number;
 }
 
-export interface SimulationResponse {
+export interface SimulationResponse extends BatteryStateMetadata {
   vehicle_id: string;
+  starting_soc_pct: number;
+  starting_soh_pct: number;
   usable_battery_capacity_kwh: number;
   estimated_energy_consumption_kwh: number;
   projected_arrival_soc_pct: number;

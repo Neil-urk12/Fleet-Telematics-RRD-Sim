@@ -1,4 +1,7 @@
 import type {
+  BatchTelemetryRequest,
+  BatchTelemetryResponse,
+  FleetTelemetryResponse,
   SimulationRequest,
   SimulationResponse,
   TelemetryEvent,
@@ -11,6 +14,16 @@ import type {
 
 export interface FleetApiClientConfig {
   baseUrl: string;
+}
+
+export class FleetApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "FleetApiError";
+    this.status = status;
+  }
 }
 
 export class FleetApiClient {
@@ -44,7 +57,7 @@ export class FleetApiClient {
       } catch {
         // Fall back to status text
       }
-      throw new Error(errorMessage);
+      throw new FleetApiError(res.status, errorMessage);
     }
 
     return res.json();
@@ -82,7 +95,7 @@ export class FleetApiClient {
       } catch {
         // Fall back to status text
       }
-      throw new Error(errorMessage);
+      throw new FleetApiError(res.status, errorMessage);
     }
   }
 
@@ -104,6 +117,21 @@ export class FleetApiClient {
       method: "POST",
       body: JSON.stringify(event),
     });
+  }
+
+  async ingestBatchTelemetry(payload: BatchTelemetryRequest): Promise<BatchTelemetryResponse> {
+    return this.fetchJson<BatchTelemetryResponse>("/api/telemetry/batch", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getFleetLatestTelemetry(): Promise<FleetTelemetryResponse> {
+    return this.fetchJson<FleetTelemetryResponse>("/api/telemetry/fleet/latest");
+  }
+
+  async getTelemetryHistory(vehicleId: string): Promise<TelemetryEvent[]> {
+    return this.fetchJson<TelemetryEvent[]>(`/api/telemetry/${encodeURIComponent(vehicleId)}/history`);
   }
 
   // Simulation

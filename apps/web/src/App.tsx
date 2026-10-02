@@ -173,6 +173,8 @@ function App() {
         current_soc: 82.4,
         current_soh: 96.1,
         status: 'IN_USE',
+        state_source: 'vehicle_defaults' as const,
+        state_timestamp: null,
     };
     const selectedTelemetry = selectedVehicleId ? telemetry[selectedVehicleId] : null;
 
