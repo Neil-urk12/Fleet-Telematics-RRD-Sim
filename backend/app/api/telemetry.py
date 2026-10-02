@@ -1,19 +1,29 @@
-from datetime import UTC, datetime
+from fastapi import APIRouter, HTTPException
 
-from fastapi import APIRouter
-
-from app.schemas.telemetry import TelemetryEvent, TelemetryResponse
+from app.core import fleet_state
+from app.schemas.telemetry import (
+    BatchTelemetryRequest,
+    BatchTelemetryResponse,
+    BatchTelemetryResult,
+    FleetTelemetryResponse,
+    TelemetryEvent,
+    TelemetryResponse,
+)
 
 router = APIRouter()
 
-# In-memory latest telemetry storage
-LATEST_TELEMETRY: dict[str, TelemetryEvent] = {}
+
+def _not_found(vehicle_id: str) -> HTTPException:
+    return HTTPException(status_code=404, detail=f"Vehicle '{vehicle_id}' not found")
 
 
 @router.post("/ingest", response_model=TelemetryResponse)
 def ingest_telemetry(event: TelemetryEvent) -> TelemetryResponse:
     """Ingest a single telemetry snapshot for a vehicle."""
-    LATEST_TELEMETRY[event.vehicle_id] = event
+    try:
+        fleet_state.store_event(event)
+    except KeyError as exc:
+        raise _not_found(event.vehicle_id) from exc
     return TelemetryResponse(
         success=True,
         message=f"Telemetry ingested for {event.vehicle_id}",
@@ -21,24 +31,63 @@ def ingest_telemetry(event: TelemetryEvent) -> TelemetryResponse:
     )
 
 
+@router.post("/batch", response_model=BatchTelemetryResponse)
+def ingest_batch_telemetry(payload: BatchTelemetryRequest) -> BatchTelemetryResponse:
+    """Ingest telemetry snapshots from multiple vehicles in one call."""
+    results: list[BatchTelemetryResult] = []
+    for event in payload.events:
+        try:
+            fleet_state.store_event(event)
+        except KeyError:
+            results.append(
+                BatchTelemetryResult(
+                    vehicle_id=event.vehicle_id,
+                    success=False,
+                    message=f"Vehicle '{event.vehicle_id}' not found",
+                )
+            )
+            continue
+        results.append(
+            BatchTelemetryResult(
+                vehicle_id=event.vehicle_id,
+                success=True,
+                message="Ingested",
+            )
+        )
+    return BatchTelemetryResponse(results=results)
+
+
+@router.get("/fleet/latest", response_model=FleetTelemetryResponse)
+def get_fleet_latest_telemetry() -> FleetTelemetryResponse:
+    """Retrieve the latest telemetry snapshot for every vehicle that has reported in."""
+    events = fleet_state.get_fleet_latest_telemetry()
+    return FleetTelemetryResponse(
+        success=True,
+        message=f"Retrieved latest telemetry for {len(events)} vehicle(s)",
+        data=events,
+    )
+
+
 @router.get("/{vehicle_id}/latest", response_model=TelemetryResponse)
 def get_latest_telemetry(vehicle_id: str) -> TelemetryResponse:
     """Retrieve the latest telemetry recorded for a vehicle."""
-    event = LATEST_TELEMETRY.get(vehicle_id)
-    if not event:
-        # Provide fallback/synthetic reading if none ingested yet
-        event = TelemetryEvent(
-            vehicle_id=vehicle_id,
-            timestamp=datetime.now(UTC),
-            soc=80.0,
-            soh=95.0,
-            speed_kph=0.0,
-            odometer_km=12500.0,
-            ambient_temp_c=22.0,
-            pack_temp_c=25.0,
-        )
+    try:
+        event = fleet_state.get_latest_telemetry(vehicle_id)
+    except KeyError as exc:
+        raise _not_found(vehicle_id) from exc
     return TelemetryResponse(
         success=True,
-        message="Telemetry retrieved",
+        message="Telemetry retrieved"
+        if event
+        else "No telemetry recorded; using vehicle battery state",
         data=event,
     )
+
+
+@router.get("/{vehicle_id}/history", response_model=list[TelemetryEvent])
+def get_telemetry_history(vehicle_id: str) -> list[TelemetryEvent]:
+    """Retrieve full telemetry history for a vehicle (empty list if none ingested)."""
+    try:
+        return fleet_state.get_telemetry_history(vehicle_id)
+    except KeyError as exc:
+        raise _not_found(vehicle_id) from exc

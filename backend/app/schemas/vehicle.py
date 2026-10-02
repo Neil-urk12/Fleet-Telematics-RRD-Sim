@@ -1,5 +1,9 @@
 from datetime import UTC, datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+BatteryStateSource = Literal["telemetry", "vehicle_defaults", "manual"]
 
 
 class VehicleBase(BaseModel):
@@ -14,15 +18,19 @@ class VehicleBase(BaseModel):
 
 
 class Vehicle(VehicleBase):
-    pass
+    state_source: BatteryStateSource = "vehicle_defaults"
+    state_timestamp: datetime | None = None
+
 
 class VehicleCreate(VehicleBase):
     """Payload for registering a new vehicle. All fields required except status."""
+
     pass
 
 
 class VehicleUpdate(BaseModel):
     """Payload for partial updates — every field optional."""
+
     name: str | None = None
     model: str | None = None
     battery_capacity_kwh: float | None = None

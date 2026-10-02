@@ -4,6 +4,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from app.schemas.vehicle import BatteryStateSource
+
 
 class SimulationRequest(BaseModel):
     vehicle_id: str = Field(..., description="Selected vehicle ID")
@@ -23,6 +25,10 @@ class SimulationRequest(BaseModel):
 
 class SimulationResponse(BaseModel):
     vehicle_id: str
+    starting_soc_pct: float
+    starting_soh_pct: float
+    state_source: BatteryStateSource
+    state_timestamp: datetime | None
     usable_battery_capacity_kwh: float
     estimated_energy_consumption_kwh: float
     projected_arrival_soc_pct: float

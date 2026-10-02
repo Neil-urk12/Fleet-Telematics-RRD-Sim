@@ -18,6 +18,8 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
         temp_capacity_factor = 1.0
 
     effective_usable_kwh = usable_capacity_kwh * temp_capacity_factor
+    if effective_usable_kwh <= 0:
+        raise ValueError("Vehicle has no usable battery capacity; route assessment is unavailable")
     current_energy_kwh = effective_usable_kwh * (vehicle.current_soc / 100.0)
 
     # 2. Consumption Modifiers
@@ -79,6 +81,10 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
 
     return SimulationResponse(
         vehicle_id=vehicle.id,
+        starting_soc_pct=vehicle.current_soc,
+        starting_soh_pct=vehicle.current_soh,
+        state_source=vehicle.state_source,
+        state_timestamp=vehicle.state_timestamp,
         usable_battery_capacity_kwh=round(effective_usable_kwh, 2),
         estimated_energy_consumption_kwh=total_consumption_kwh,
         projected_arrival_soc_pct=projected_arrival_soc,
