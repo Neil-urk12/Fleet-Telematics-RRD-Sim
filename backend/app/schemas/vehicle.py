@@ -12,6 +12,16 @@ class VehicleBase(BaseModel):
     model: str = Field(..., description="Vehicle make and model")
     battery_capacity_kwh: float = Field(..., description="Nominal battery capacity in kWh")
     baseline_efficiency_wh_km: float = Field(..., description="Baseline efficiency in Wh/km")
+    curb_mass_kg: float = Field(
+        default=2500.0, gt=0, allow_inf_nan=False, description="Unloaded vehicle mass in kg"
+    )
+    regen_efficiency: float = Field(
+        default=0.60,
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+        description="Fraction of descent potential energy recoverable at HIGH regen",
+    )
     current_soc: float = Field(..., ge=0.0, le=100.0, description="Current State of Charge (%)")
     current_soh: float = Field(..., ge=0.0, le=100.0, description="Current State of Health (%)")
     status: str = Field(default="AVAILABLE", description="Vehicle operational status")
@@ -23,7 +33,7 @@ class Vehicle(VehicleBase):
 
 
 class VehicleCreate(VehicleBase):
-    """Payload for registering a new vehicle. All fields required except status."""
+    """Vehicle registration with default status, mass, and regenerative efficiency."""
 
     pass
 
@@ -35,6 +45,8 @@ class VehicleUpdate(BaseModel):
     model: str | None = None
     battery_capacity_kwh: float | None = None
     baseline_efficiency_wh_km: float | None = None
+    curb_mass_kg: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    regen_efficiency: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     current_soc: float | None = Field(default=None, ge=0.0, le=100.0)
     current_soh: float | None = Field(default=None, ge=0.0, le=100.0)
     status: str | None = None
