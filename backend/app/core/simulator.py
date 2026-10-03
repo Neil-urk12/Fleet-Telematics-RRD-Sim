@@ -1,6 +1,12 @@
 from app.schemas.simulation import SimulationRequest, SimulationResponse
 from app.schemas.vehicle import Vehicle
 
+# Illustrative PoC calibration coefficients, not measured OEM performance.
+ROAD_MULTIPLIERS = {"URBAN": 1.05, "HIGHWAY": 1.15, "MIXED": 1.0}
+REGEN_MULTIPLIERS = {"OFF": 0.0, "LOW": 0.35, "MEDIUM": 0.65, "HIGH": 1.0}
+CLIMB_EFFICIENCY = 0.80
+PAYLOAD_MASS_COEFFICIENT = 0.125
+
 
 def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> SimulationResponse:
     # 1. Battery Degradation & Available Energy Calculation
@@ -31,19 +37,47 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
     hvac_adders = {"OFF": 0.0, "LOW": 15.0, "MEDIUM": 30.0, "HIGH": 55.0}  # Wh/km
     hvac_adder = hvac_adders.get(req.hvac_mode, 30.0)
 
-    # Payload penalty: ~0.5% consumption increase per 100 kg
-    payload_mult = 1.0 + (req.payload_kg / 100.0) * 0.005
+    # Scale the payload penalty relative to unloaded vehicle mass.
+    # At the legacy 2500 kg default this retains +0.5% per 100 kg.
+    payload_mult = 1.0 + PAYLOAD_MASS_COEFFICIENT * req.payload_kg / vehicle.curb_mass_kg
 
     # Elevation demand (potential energy m*g*h in kWh, assuming ~80% efficiency climbing)
-    # Total mass ~ Vehicle curb mass (e.g. 2500kg) + payload
-    total_mass_kg = 2500.0 + req.payload_kg
-    climb_energy_kwh = (total_mass_kg * 9.81 * req.elevation_gain_m) / (3.6e6 * 0.80)
+    total_mass_kg = vehicle.curb_mass_kg + req.payload_kg
+    climb_energy_kwh = (total_mass_kg * 9.81 * req.elevation_gain_m) / (3.6e6 * CLIMB_EFFICIENCY)
 
     # Base propulsion consumption
-    base_wh_km = (vehicle.baseline_efficiency_wh_km * style_mult * payload_mult) + hvac_adder
+    base_wh_km = (
+        vehicle.baseline_efficiency_wh_km
+        * ROAD_MULTIPLIERS[req.road_type]
+        * style_mult
+        * payload_mult
+    )
     propulsion_energy_kwh = (base_wh_km * req.route_distance_km) / 1000.0
+    hvac_energy_kwh = hvac_adder * req.route_distance_km / 1000.0
 
-    total_consumption_kwh = round(propulsion_energy_kwh + climb_energy_kwh, 2)
+    gross_energy_kwh = propulsion_energy_kwh + hvac_energy_kwh + climb_energy_kwh
+    recovery_per_kg_kwh = (
+        9.81
+        * req.elevation_loss_m
+        / 3.6e6
+        * vehicle.regen_efficiency
+        * REGEN_MULTIPLIERS[req.regen_level]
+    )
+    payload_demand_kwh = (
+        propulsion_energy_kwh
+        - propulsion_energy_kwh / payload_mult
+        + req.payload_kg * 9.81 * req.elevation_gain_m / (3.6e6 * CLIMB_EFFICIENCY)
+    )
+    # Conservative PoC policy: payload recovery can offset its added demand,
+    # but carrying more cargo must never improve arrival SOC or remaining range.
+    payload_recovery_kwh = min(req.payload_kg * recovery_per_kg_kwh, payload_demand_kwh)
+    # Conservative route-average recovery: no net charging is predicted without
+    # segment order, pack headroom, or regen power limits.
+    recovered_regen_kwh = min(
+        gross_energy_kwh,
+        vehicle.curb_mass_kg * recovery_per_kg_kwh + payload_recovery_kwh,
+    )
+    total_consumption_kwh = round(gross_energy_kwh - recovered_regen_kwh, 2)
 
     # 3. Projected Arrival SOC and Remaining Range
     remaining_energy_kwh = current_energy_kwh - total_consumption_kwh
@@ -87,6 +121,10 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
         state_timestamp=vehicle.state_timestamp,
         usable_battery_capacity_kwh=round(effective_usable_kwh, 2),
         estimated_energy_consumption_kwh=total_consumption_kwh,
+        propulsion_energy_kwh=round(propulsion_energy_kwh, 2),
+        hvac_energy_kwh=round(hvac_energy_kwh, 2),
+        climb_energy_kwh=round(climb_energy_kwh, 2),
+        recovered_regen_energy_kwh=round(recovered_regen_kwh, 2),
         projected_arrival_soc_pct=projected_arrival_soc,
         remaining_range_km=remaining_range_km,
         risk_level=risk_level,

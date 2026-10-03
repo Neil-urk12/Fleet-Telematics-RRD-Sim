@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 from app.schemas.vehicle import BatteryStateSource
 
+RoadType = Literal["URBAN", "HIGHWAY", "MIXED"]
+
 
 class SimulationRequest(BaseModel):
     vehicle_id: str = Field(..., description="Selected vehicle ID")
@@ -13,6 +15,10 @@ class SimulationRequest(BaseModel):
     elevation_gain_m: float = Field(
         default=0.0, ge=0, description="Total elevation climb in meters"
     )
+    elevation_loss_m: float = Field(
+        default=0.0, ge=0, allow_inf_nan=False, description="Total elevation descent in meters"
+    )
+    road_type: RoadType = Field(default="MIXED")
     ambient_temp_c: float = Field(default=25.0, description="Ambient temperature in °C")
     payload_kg: float = Field(default=0.0, ge=0, description="Cargo/passenger payload in kg")
     hvac_mode: Literal["OFF", "LOW", "MEDIUM", "HIGH"] = Field(default="MEDIUM")
@@ -31,6 +37,10 @@ class SimulationResponse(BaseModel):
     state_timestamp: datetime | None
     usable_battery_capacity_kwh: float
     estimated_energy_consumption_kwh: float
+    propulsion_energy_kwh: float
+    hvac_energy_kwh: float
+    climb_energy_kwh: float
+    recovered_regen_energy_kwh: float
     projected_arrival_soc_pct: float
     remaining_range_km: float
     risk_level: Literal["SAFE", "CAUTION", "NOT_RECOMMENDED"]
@@ -55,6 +65,8 @@ class BatchSimulationRequest(BaseModel):
     )
     route_distance_km: float = Field(..., gt=0)
     elevation_gain_m: float = Field(default=0.0, ge=0)
+    elevation_loss_m: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    road_type: RoadType = Field(default="MIXED")
     ambient_temp_c: float = Field(default=25.0)
     payload_kg: float = Field(default=0.0, ge=0)
     hvac_mode: Literal["OFF", "LOW", "MEDIUM", "HIGH"] = Field(default="MEDIUM")
@@ -86,6 +98,8 @@ class CompareSimulationRequest(BaseModel):
     vehicle_id: str = Field(..., description="Selected vehicle ID")
     route_distance_km: float = Field(..., gt=0)
     elevation_gain_m: float = Field(default=0.0, ge=0)
+    elevation_loss_m: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    road_type: RoadType = Field(default="MIXED")
     ambient_temp_c: float = Field(default=25.0)
     payload_kg: float = Field(default=0.0, ge=0)
     reserve_soc_target_pct: float = Field(default=15.0, ge=0, le=50)
