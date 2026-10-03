@@ -25,6 +25,9 @@ export interface Vehicle extends BatteryStateMetadata {
   model: string;
   battery_capacity_kwh: number;
   baseline_efficiency_wh_km: number;
+  /** Optional for offline demo profiles; backend defaults to 2500 kg and 0.60. */
+  curb_mass_kg?: number;
+  regen_efficiency?: number;
   current_soc: number;
   current_soh: number;
   status: VehicleStatus;
@@ -36,6 +39,8 @@ export interface VehicleCreate {
   model: string;
   battery_capacity_kwh: number;
   baseline_efficiency_wh_km: number;
+  curb_mass_kg?: number;
+  regen_efficiency?: number;
   current_soc: number;
   current_soh: number;
   status?: VehicleStatus;
@@ -46,6 +51,8 @@ export interface VehicleUpdate {
   model?: string;
   battery_capacity_kwh?: number;
   baseline_efficiency_wh_km?: number;
+  curb_mass_kg?: number;
+  regen_efficiency?: number;
   current_soc?: number;
   current_soh?: number;
   status?: VehicleStatus;
@@ -100,12 +107,15 @@ export interface FleetTelemetryResponse {
 export type HvacMode = "OFF" | "LOW" | "MEDIUM" | "HIGH";
 export type DrivingStyle = "ECO" | "NORMAL" | "AGGRESSIVE";
 export type RegenLevel = "OFF" | "LOW" | "MEDIUM" | "HIGH";
+export type RoadType = "URBAN" | "HIGHWAY" | "MIXED";
 export type RiskLevel = "SAFE" | "CAUTION" | "NOT_RECOMMENDED";
 
 export interface SimulationRequest {
   vehicle_id: string;
   route_distance_km: number;
   elevation_gain_m?: number;
+  elevation_loss_m?: number;
+  road_type?: RoadType;
   ambient_temp_c?: number;
   payload_kg?: number;
   hvac_mode?: HvacMode;
@@ -120,6 +130,11 @@ export interface SimulationResponse extends BatteryStateMetadata {
   starting_soh_pct: number;
   usable_battery_capacity_kwh: number;
   estimated_energy_consumption_kwh: number;
+  /** Backend energy breakdown; offline demo estimates may omit it. */
+  propulsion_energy_kwh?: number;
+  hvac_energy_kwh?: number;
+  climb_energy_kwh?: number;
+  recovered_regen_energy_kwh?: number;
   projected_arrival_soc_pct: number;
   remaining_range_km: number;
   risk_level: RiskLevel;
