@@ -131,7 +131,7 @@ export default function App() {
 
       const payloadPenalty = 1 + (payloadKg / 2000) * 0.15;
       const elevationWorkKwh = (elevationGainM * 2500 * 9.81) / (3.6e6 * 0.85);
-      const hvacKw = params.hvac_mode === "HIGH" ? 3.5 : params.hvac_mode === "LOW" ? 1.5 : 0;
+      const hvacKw = { OFF: 0, LOW: 1.5, MEDIUM: 2.2, HIGH: 3.5 }[params.hvac_mode ?? "LOW"];
       const drivingMult = params.driving_style === "AGGRESSIVE" ? 1.25 : params.driving_style === "ECO" ? 0.88 : 1.0;
       
       const estimatedConsumptionKwh =
@@ -140,8 +140,9 @@ export default function App() {
         hvacKw * (params.route_distance_km / 65);
       
       const socConsumedPct = (estimatedConsumptionKwh / vehicle.battery_capacity_kwh) * 100;
-      const projectedArrivalSoc = Math.max(0, startSoc - socConsumedPct);
-      const remainingRange = (projectedArrivalSoc / 100) * ((vehicle.battery_capacity_kwh * 1000) / (vehicle.baseline_efficiency_wh_km || 280));
+      // Preserve energy deficits so zero reserve cannot make an infeasible route acceptable.
+      const projectedArrivalSoc = startSoc - socConsumedPct;
+      const remainingRange = (Math.max(0, projectedArrivalSoc) / 100) * ((vehicle.battery_capacity_kwh * 1000) / (vehicle.baseline_efficiency_wh_km || 280));
       
       const riskLevel: "SAFE" | "CAUTION" | "NOT_RECOMMENDED" =
         projectedArrivalSoc < targetReservePct

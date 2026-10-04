@@ -1,6 +1,4 @@
-export type DrivingStyle = 'ECO' | 'NORMAL' | 'AGGRESSIVE';
-export type HvacMode = 'OFF' | 'LOW' | 'MEDIUM' | 'HIGH';
-export type RegenLevel = 'OFF' | 'LOW' | 'MEDIUM' | 'HIGH';
+import type { DrivingStyle, HvacMode, RegenLevel } from '@fleet/api-client';
 
 interface ControlsBarProps {
     isRunning: boolean;
@@ -14,12 +12,9 @@ interface ControlsBarProps {
     onHvacModeChange: (mode: HvacMode) => void;
     regenLevel: RegenLevel;
     onRegenLevelChange: (regen: RegenLevel) => void;
-    payload: number;
-    onPayloadChange: (payload: number) => void;
     progressFraction: number;
     onProgressChange: (progress: number) => void;
     selectedVehicleId: string | null;
-    onRunSimulation: (vehicleId: string) => void;
     isSimulating?: boolean;
 }
 
@@ -35,12 +30,9 @@ export function ControlsBar({
     onHvacModeChange,
     regenLevel,
     onRegenLevelChange,
-    payload,
-    onPayloadChange,
     progressFraction,
     onProgressChange,
     selectedVehicleId,
-    onRunSimulation,
     isSimulating = false,
 }: ControlsBarProps) {
     const distanceKm = (progressFraction * 129.4).toFixed(1);
@@ -105,6 +97,8 @@ export function ControlsBar({
                 {(['ECO', 'NORMAL', 'AGGRESSIVE'] as DrivingStyle[]).map(d => (
                     <button
                         key={d}
+                        aria-label={`Driving style: ${d}`}
+                        aria-pressed={drivingStyle === d}
                         className={`ctrl-btn ${drivingStyle === d ? 'ctrl-btn--active' : ''} ${
                             d === 'AGGRESSIVE' ? 'ctrl-btn--danger' : d === 'ECO' ? 'ctrl-btn--green' : ''
                         }`}
@@ -123,6 +117,8 @@ export function ControlsBar({
                 {(['OFF', 'LOW', 'MEDIUM', 'HIGH'] as HvacMode[]).map(h => (
                     <button
                         key={h}
+                        aria-label={`HVAC: ${h}`}
+                        aria-pressed={hvacMode === h}
                         className={`ctrl-btn ctrl-btn--sm ${hvacMode === h ? 'ctrl-btn--active' : ''}`}
                         onClick={() => onHvacModeChange(h)}
                     >
@@ -139,6 +135,8 @@ export function ControlsBar({
                 {(['OFF', 'LOW', 'MEDIUM', 'HIGH'] as RegenLevel[]).map(r => (
                     <button
                         key={r}
+                        aria-label={`Regen: ${r}`}
+                        aria-pressed={regenLevel === r}
                         className={`ctrl-btn ctrl-btn--sm ${regenLevel === r ? 'ctrl-btn--active' : ''}`}
                         onClick={() => onRegenLevelChange(r)}
                     >
@@ -149,33 +147,16 @@ export function ControlsBar({
 
             <div className="controls-divider" />
 
-            {/* Payload slider */}
-            <div className="controls-group">
-                <span className="ctrl-label">PAYLOAD</span>
-                <input
-                    type="range"
-                    min={0}
-                    max={1000}
-                    step={50}
-                    value={payload}
-                    onChange={e => onPayloadChange(Number(e.target.value))}
-                    className="ctrl-slider"
-                    title={`Payload: ${payload} kg`}
-                />
-                <span className="ctrl-value">{payload} kg</span>
-            </div>
-
-            <div className="controls-divider" />
-
             {/* Run simulation button */}
             <div className="controls-group" style={{ marginLeft: 'auto' }}>
                 <button
+                    type="submit"
+                    form="route-assessment"
                     className={`ctrl-btn ctrl-btn--run ${isSimulating ? 'ctrl-btn--running' : ''}`}
                     disabled={!selectedVehicleId || isSimulating}
-                    onClick={() => selectedVehicleId && onRunSimulation(selectedVehicleId)}
                     title={
                         selectedVehicleId
-                            ? `Run full physics degradation simulation for ${selectedVehicleId}`
+                            ? `Assess the entered route for ${selectedVehicleId}`
                             : 'Select a vehicle in the fleet list first'
                     }
                 >

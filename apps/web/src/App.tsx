@@ -3,7 +3,9 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useFleetData } from './hooks/useFleetData';
 import { Header } from './components/Header';
 import { FleetPanel } from './components/FleetPanel';
-import { ControlsBar, type DrivingStyle, type HvacMode, type RegenLevel } from './components/ControlsBar';
+import { ControlsBar } from './components/ControlsBar';
+import { RouteInputs } from './components/RouteInputs';
+import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericParameters } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
 import { ElevationChart } from './components/ElevationChart';
 import { ThermalMap } from './components/ThermalMap';
@@ -30,6 +32,15 @@ const ELEVATION_DATA = [
     { distance: 120,   elevation: 190 },
     { distance: 129.4, elevation: 182 },
 ];
+
+const DEMO_ELEVATION = ELEVATION_DATA.reduce((totals, point, index) => {
+    if (index > 0) {
+        const change = point.elevation - ELEVATION_DATA[index - 1].elevation;
+        totals.gain += Math.max(0, change);
+        totals.loss += Math.max(0, -change);
+    }
+    return totals;
+}, { gain: 0, loss: 0 });
 
 // Helper to compute physics-informed SOC curve along the route
 function buildDynamicSocData(
@@ -145,7 +156,8 @@ function App() {
     // ── Keyboard shortcuts ────────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLInputElement) return;
+            if (e.target instanceof HTMLElement &&
+                (e.target.matches('input, select, textarea, button') || e.target.isContentEditable)) return;
             if (e.code === 'Space') {
                 e.preventDefault();
                 setIsRunning(r => !r);
@@ -206,13 +218,11 @@ function App() {
         : 0;
 
     // ── Delegate simulation to backend via the hook ────────────────────
-    const handleRunSimulation = (vehicleId: string) => {
+    const handleRunSimulation = (parameters: SimulationNumericParameters & { road_type: RoadType }) => {
+        if (!selectedVehicleId || isSimulating) return;
         runSimulation({
-            vehicle_id: vehicleId,
-            route_distance_km: TOTAL_DISTANCE,
-            elevation_gain_m: 720,
-            ambient_temp_c: selectedTelemetry?.ambient_temp_c ?? 22,
-            payload_kg: payload,
+            ...parameters,
+            vehicle_id: selectedVehicleId,
             driving_style: drivingStyle,
             hvac_mode: hvacMode,
             regen_level: regenLevel,
@@ -255,26 +265,37 @@ function App() {
                 batteryHealth={Math.round(avgSoh * 10) / 10}
             />
 
-            <ControlsBar
-                isRunning={isRunning}
-                onToggleRunning={() => setIsRunning(r => !r)}
-                speed={speed}
-                onSpeedChange={setSpeed}
-                onReset={() => setProgressFraction(0)}
-                drivingStyle={drivingStyle}
-                onDrivingStyleChange={setDrivingStyle}
-                hvacMode={hvacMode}
-                onHvacModeChange={setHvacMode}
-                regenLevel={regenLevel}
-                onRegenLevelChange={setRegenLevel}
-                payload={payload}
-                onPayloadChange={setPayload}
-                progressFraction={progressFraction}
-                onProgressChange={setProgressFraction}
-                selectedVehicleId={selectedVehicleId}
-                onRunSimulation={handleRunSimulation}
-                isSimulating={isSimulating}
-            />
+            <div className="assessment-toolbar">
+                <RouteInputs
+                    initialValues={{
+                        route_distance_km: String(TOTAL_DISTANCE),
+                        elevation_gain_m: String(DEMO_ELEVATION.gain),
+                        elevation_loss_m: String(DEMO_ELEVATION.loss),
+                        ambient_temp_c: '22',
+                        payload_kg: '450',
+                        reserve_soc_target_pct: '15',
+                    }}
+                    onPayloadChange={setPayload}
+                    onSubmit={handleRunSimulation}
+                />
+                <ControlsBar
+                    isRunning={isRunning}
+                    onToggleRunning={() => setIsRunning(r => !r)}
+                    speed={speed}
+                    onSpeedChange={setSpeed}
+                    onReset={() => setProgressFraction(0)}
+                    drivingStyle={drivingStyle}
+                    onDrivingStyleChange={setDrivingStyle}
+                    hvacMode={hvacMode}
+                    onHvacModeChange={setHvacMode}
+                    regenLevel={regenLevel}
+                    onRegenLevelChange={setRegenLevel}
+                    progressFraction={progressFraction}
+                    onProgressChange={setProgressFraction}
+                    selectedVehicleId={selectedVehicleId}
+                    isSimulating={isSimulating}
+                />
+            </div>
 
             <div className="main-content">
                 <FleetPanel

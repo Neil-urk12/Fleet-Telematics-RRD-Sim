@@ -1,15 +1,31 @@
 import React, { useState } from "react";
 import {
+  Keyboard,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { formatBatteryState } from "@fleet/api-client";
-import type { SimulationResponse, Vehicle } from "@fleet/api-client";
+import {
+  formatBatteryState,
+  parseSimulationInputs,
+  simulationNumericFields,
+} from "@fleet/api-client";
+import type {
+  DrivingStyle,
+  HvacMode,
+  RegenLevel,
+  RoadType,
+  SimulationNumericDraft,
+  SimulationRequest,
+  SimulationResponse,
+  Vehicle,
+} from "@fleet/api-client";
 import { colors } from "../constants/theme";
 import { Header, SimulationResult, ErrorBanner } from "../components";
 
@@ -17,17 +33,7 @@ interface SimulatorScreenProps {
   vehicles: Vehicle[];
   selectedVehicle: Vehicle | null;
   onSelectVehicle: (vehicle: Vehicle) => void;
-  onRunSimulation: (params: {
-    vehicle_id: string;
-    route_distance_km: number;
-    elevation_gain_m: number;
-    ambient_temp_c: number;
-    payload_kg: number;
-    hvac_mode: "OFF" | "LOW" | "HIGH";
-    driving_style: "ECO" | "NORMAL" | "AGGRESSIVE";
-    regen_level: "LOW" | "MEDIUM" | "HIGH";
-    reserve_soc_target_pct: number;
-  }) => Promise<SimulationResponse | null>;
+  onRunSimulation: (params: SimulationRequest) => Promise<SimulationResponse | null>;
   simResult: SimulationResponse | null;
   simulationOrigin?: "backend" | "local";
   loading: boolean;
@@ -48,34 +54,42 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
   refreshing = false,
   onRefresh,
 }) => {
-  const [distanceKm, setDistanceKm] = useState<number>(120);
-  const [elevationGainM, setElevationGainM] = useState<number>(350);
-  const [ambientTempC, setAmbientTempC] = useState<number>(18);
-  const [payloadKg, setPayloadKg] = useState<number>(250);
-  const [hvacMode, setHvacMode] = useState<"OFF" | "LOW" | "HIGH">("LOW");
-  const [drivingStyle, setDrivingStyle] = useState<"ECO" | "NORMAL" | "AGGRESSIVE">("NORMAL");
-  const [regenLevel, setRegenLevel] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
+  const [values, setValues] = useState<SimulationNumericDraft>({
+    route_distance_km: "120",
+    elevation_gain_m: "350",
+    elevation_loss_m: "0",
+    ambient_temp_c: "18",
+    payload_kg: "250",
+    reserve_soc_target_pct: "15",
+  });
+  const [roadType, setRoadType] = useState<RoadType>("MIXED");
+  const [hvacMode, setHvacMode] = useState<HvacMode>("LOW");
+  const [drivingStyle, setDrivingStyle] = useState<DrivingStyle>("NORMAL");
+  const [regenLevel, setRegenLevel] = useState<RegenLevel>("MEDIUM");
+  const [showErrors, setShowErrors] = useState(false);
+  const { parameters, errors } = parseSimulationInputs(values);
 
   const activeVehicle = selectedVehicle || vehicles[0];
 
   const handleSimulate = async () => {
-    if (!activeVehicle) return;
+    setShowErrors(true);
+    if (!parameters || !activeVehicle || loading) return;
+    Keyboard.dismiss();
     await onRunSimulation({
+      ...parameters,
       vehicle_id: activeVehicle.id,
-      route_distance_km: distanceKm,
-      elevation_gain_m: elevationGainM,
-      ambient_temp_c: ambientTempC,
-      payload_kg: payloadKg,
+      road_type: roadType,
       hvac_mode: hvacMode,
       driving_style: drivingStyle,
       regen_level: regenLevel,
-      reserve_soc_target_pct: 15,
     });
   };
 
   return (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
       refreshControl={
         onRefresh ? (
@@ -137,152 +151,43 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
       <View style={styles.sectionCard}>
         <Text style={styles.cardTitle}>Route & Environmental Conditions</Text>
 
-        {/* Distance Selector */}
-        <Text style={styles.inputLabel}>Route Distance</Text>
-        <View style={styles.pillRow}>
-          {[40, 80, 120, 200].map((km) => (
-            <TouchableOpacity
-              key={km}
-              style={[styles.pill, distanceKm === km && styles.pillActive]}
-              onPress={() => setDistanceKm(km)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  distanceKm === km && styles.pillTextActive,
-                ]}
-              >
-                {km} km
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.numericGrid}>
+          {simulationNumericFields.map((field) => {
+            const fieldError = showErrors ? errors[field.key] : undefined;
+            return (
+              <View key={field.key} style={styles.numericField}>
+                <Text style={styles.inputLabel}>{field.label}</Text>
+                <TextInput
+                  accessibilityLabel={field.label}
+                  value={values[field.key]}
+                  onChangeText={(value) => setValues((previous) => ({ ...previous, [field.key]: value }))}
+                  keyboardType={field.key === "ambient_temp_c"
+                    ? (Platform.OS === "ios" ? "numbers-and-punctuation" : "default")
+                    : "decimal-pad"}
+                  style={[styles.numericInput, fieldError && styles.numericInputInvalid]}
+                />
+                {fieldError && (
+                  <Text accessibilityRole="alert" style={styles.fieldError}>{fieldError}</Text>
+                )}
+              </View>
+            );
+          })}
         </View>
-
-        {/* Elevation Gain */}
-        <Text style={styles.inputLabel}>Elevation Ascent</Text>
-        <View style={styles.pillRow}>
-          {[
-            { label: "Flat (50m)", val: 50 },
-            { label: "Hilly (350m)", val: 350 },
-            { label: "Mountain (750m)", val: 750 },
-          ].map((item) => (
-            <TouchableOpacity
-              key={item.val}
-              style={[
-                styles.pill,
-                elevationGainM === item.val && styles.pillActive,
-              ]}
-              onPress={() => setElevationGainM(item.val)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  elevationGainM === item.val && styles.pillTextActive,
-                ]}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Ambient Temperature */}
-        <Text style={styles.inputLabel}>Ambient Temperature</Text>
-        <View style={styles.pillRow}>
-          {[
-            { label: "0°C (Cold)", val: 0 },
-            { label: "18°C (Mild)", val: 18 },
-            { label: "35°C (Hot)", val: 35 },
-          ].map((item) => (
-            <TouchableOpacity
-              key={item.val}
-              style={[
-                styles.pill,
-                ambientTempC === item.val && styles.pillActive,
-              ]}
-              onPress={() => setAmbientTempC(item.val)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  ambientTempC === item.val && styles.pillTextActive,
-                ]}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Payload */}
-        <Text style={styles.inputLabel}>Cargo Payload</Text>
-        <View style={styles.pillRow}>
-          {[0, 250, 600, 1200].map((kg) => (
-            <TouchableOpacity
-              key={kg}
-              style={[styles.pill, payloadKg === kg && styles.pillActive]}
-              onPress={() => setPayloadKg(kg)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  payloadKg === kg && styles.pillTextActive,
-                ]}
-              >
-                {kg === 0 ? "Empty" : `${kg} kg`}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* HVAC Mode */}
-        <Text style={styles.inputLabel}>HVAC Cabin Climate</Text>
-        <View style={styles.pillRow}>
-          {(["OFF", "LOW", "HIGH"] as const).map((mode) => (
-            <TouchableOpacity
-              key={mode}
-              style={[styles.pill, hvacMode === mode && styles.pillActive]}
-              onPress={() => setHvacMode(mode)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  hvacMode === mode && styles.pillTextActive,
-                ]}
-              >
-                {mode}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Driving Style */}
-        <Text style={styles.inputLabel}>Driver Behavior</Text>
-        <View style={styles.pillRow}>
-          {(["ECO", "NORMAL", "AGGRESSIVE"] as const).map((style) => (
-            <TouchableOpacity
-              key={style}
-              style={[
-                styles.pill,
-                drivingStyle === style && styles.pillActive,
-              ]}
-              onPress={() => setDrivingStyle(style)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  drivingStyle === style && styles.pillTextActive,
-                ]}
-              >
-                {style}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <Text style={styles.inputHint}>Arrival reserve can be set from 0 to 50%.</Text>
+        <ChoiceField label="Road type" options={["URBAN", "HIGHWAY", "MIXED"]}
+          value={roadType} onChange={setRoadType} />
+        <ChoiceField label="HVAC" options={["OFF", "LOW", "MEDIUM", "HIGH"]}
+          value={hvacMode} onChange={setHvacMode} />
+        <ChoiceField label="Driving style" options={["ECO", "NORMAL", "AGGRESSIVE"]}
+          value={drivingStyle} onChange={setDrivingStyle} />
+        <ChoiceField label="Regen" options={["OFF", "LOW", "MEDIUM", "HIGH"]}
+          value={regenLevel} onChange={setRegenLevel} />
 
         {/* Run Simulation Button */}
         <TouchableOpacity
-          style={styles.runButton}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: loading || !activeVehicle }}
+          style={[styles.runButton, (loading || !activeVehicle) && styles.runButtonDisabled]}
           onPress={handleSimulate}
           disabled={loading || !activeVehicle}
           activeOpacity={0.8}
@@ -294,7 +199,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
             style={{ marginRight: 8 }}
           />
           <Text style={styles.runButtonText}>
-            {loading ? "Calculating Telematics..." : "Run Physics Simulation"}
+            {loading ? "Assessing route…" : "Assess route"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -303,11 +208,43 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
       {simResult && simResult.vehicle_id === activeVehicle?.id && (
         <View style={styles.resultWrapper}>
           <SimulationResult result={simResult} origin={simulationOrigin} />
+          {simulationOrigin === "local" && (
+            <Text style={styles.inputHint}>
+              This offline estimate excludes temperature, road type, descent, and regen.
+              Connect to the backend to assess those inputs.
+            </Text>
+          )}
         </View>
       )}
     </ScrollView>
   );
 };
+
+function ChoiceField<T extends string>({ label, options, value, onChange }: {
+  label: string;
+  options: readonly T[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.pillRow}>
+        {options.map((option) => (
+          <TouchableOpacity key={option}
+            accessibilityRole="radio"
+            accessibilityLabel={`${label}: ${option}`}
+            accessibilityState={{ checked: value === option }}
+            aria-checked={value === option}
+            style={[styles.pill, value === option && styles.pillActive]}
+            onPress={() => onChange(option)}>
+            <Text style={[styles.pillText, value === option && styles.pillTextActive]}>{option}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   scrollContent: {
@@ -365,6 +302,43 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  numericGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  numericField: {
+    flexGrow: 1,
+    flexBasis: "46%",
+    minWidth: 130,
+  },
+  numericInput: {
+    color: colors.textPrimary,
+    backgroundColor: colors.bgSurfaceAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 44,
+    fontSize: 16,
+  },
+  numericInputInvalid: {
+    borderColor: colors.riskDanger,
+  },
+  fieldError: {
+    color: colors.errorText,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  inputHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 10,
+  },
+  runButtonDisabled: {
+    opacity: 0.5,
   },
   pillRow: {
     flexDirection: "row",

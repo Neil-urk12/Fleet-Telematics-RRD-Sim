@@ -5,7 +5,7 @@
     display: grid;
     height: 100vh;
     grid-template-rows: auto auto 1fr auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1px;
     background: var(--border-color);
     overflow: hidden;
@@ -164,6 +164,123 @@
 /* ══════════════════════════════════════════════════════════════════
    CONTROLS BAR
    ══════════════════════════════════════════════════════════════════ */
+.assessment-toolbar {
+    min-width: 0;
+}
+
+.route-inputs {
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.route-inputs fieldset {
+    border: 0;
+    min-width: 0;
+}
+
+.route-inputs legend {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.route-inputs-hint {
+    margin: 2px 0 var(--space-sm);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.route-inputs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: var(--space-sm);
+}
+
+.route-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    min-width: 0;
+}
+
+.route-field input,
+.route-field select {
+    width: 100%;
+    min-height: 34px;
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color-scheme: dark;
+}
+
+.route-field input[aria-invalid="true"] {
+    border-color: var(--accent-red);
+}
+
+.route-field-error {
+    color: var(--accent-red);
+}
+
+.route-field input:focus-visible,
+.route-field select:focus-visible,
+.controls-bar button:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+@media (max-width: 900px), (max-height: 650px) {
+    .dashboard {
+        overflow: auto;
+        grid-template-rows: auto auto minmax(300px, 1fr) auto;
+    }
+}
+
+@media (max-width: 600px) {
+    .dashboard {
+        grid-template-rows: repeat(4, auto);
+    }
+
+    .dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-md);
+        padding: var(--space-md) var(--space-lg);
+    }
+
+    .header-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-sm);
+    }
+
+    .header-subtitle {
+        flex-wrap: wrap;
+    }
+
+    .main-content,
+    .bottom-row {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: auto;
+    }
+
+    .main-content > *,
+    .bottom-row > * {
+        min-height: 240px;
+    }
+
+    .controls-group {
+        flex-wrap: wrap;
+    }
+}
+
 .controls-bar {
     display: flex;
     align-items: center;
