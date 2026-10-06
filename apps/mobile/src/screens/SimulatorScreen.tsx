@@ -13,6 +13,7 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   formatBatteryState,
+  isAssessmentOutdated,
   parseSimulationInputs,
   simulationNumericFields,
 } from "@fleet/api-client";
@@ -21,6 +22,7 @@ import type {
   HvacMode,
   RegenLevel,
   RoadType,
+  SimulationAssessment,
   SimulationNumericDraft,
   SimulationRequest,
   SimulationResponse,
@@ -33,9 +35,8 @@ interface SimulatorScreenProps {
   vehicles: Vehicle[];
   selectedVehicle: Vehicle | null;
   onSelectVehicle: (vehicle: Vehicle) => void;
-  onRunSimulation: (params: SimulationRequest) => Promise<SimulationResponse | null>;
-  simResult: SimulationResponse | null;
-  simulationOrigin?: "backend" | "local";
+  onRunSimulation: (params: Required<SimulationRequest>) => Promise<SimulationResponse | null>;
+  assessment: SimulationAssessment | null;
   loading: boolean;
   error: string | null;
   refreshing?: boolean;
@@ -47,8 +48,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
   selectedVehicle,
   onSelectVehicle,
   onRunSimulation,
-  simResult,
-  simulationOrigin = "backend",
+  assessment,
   loading,
   error,
   refreshing = false,
@@ -70,19 +70,20 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
   const { parameters, errors } = parseSimulationInputs(values);
 
   const activeVehicle = selectedVehicle || vehicles[0];
+  const currentRequest = parameters && activeVehicle ? {
+    ...parameters,
+    vehicle_id: activeVehicle.id,
+    road_type: roadType,
+    hvac_mode: hvacMode,
+    driving_style: drivingStyle,
+    regen_level: regenLevel,
+  } : null;
 
   const handleSimulate = async () => {
     setShowErrors(true);
-    if (!parameters || !activeVehicle || loading) return;
+    if (!currentRequest || loading) return;
     Keyboard.dismiss();
-    await onRunSimulation({
-      ...parameters,
-      vehicle_id: activeVehicle.id,
-      road_type: roadType,
-      hvac_mode: hvacMode,
-      driving_style: drivingStyle,
-      regen_level: regenLevel,
-    });
+    await onRunSimulation(currentRequest);
   };
 
   return (
@@ -205,15 +206,10 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
       </View>
 
       {/* Simulation Result Output */}
-      {simResult && simResult.vehicle_id === activeVehicle?.id && (
+      {assessment && (
         <View style={styles.resultWrapper}>
-          <SimulationResult result={simResult} origin={simulationOrigin} />
-          {simulationOrigin === "local" && (
-            <Text style={styles.inputHint}>
-              This offline estimate excludes temperature, road type, descent, and regen.
-              Connect to the backend to assess those inputs.
-            </Text>
-          )}
+          <SimulationResult assessment={assessment}
+            isOutdated={isAssessmentOutdated(assessment, currentRequest, activeVehicle)} />
         </View>
       )}
     </ScrollView>

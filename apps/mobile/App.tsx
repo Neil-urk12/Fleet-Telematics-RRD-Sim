@@ -3,7 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
-import type { SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
+import type { SimulationAssessment, SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
 
 import { client, API_URL } from "./src/config/api";
 import { colors } from "./src/constants/theme";
@@ -59,13 +59,12 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>("simulator");
   const [vehicles, setVehicles] = useState<Vehicle[]>(fallbackVehicles);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(fallbackVehicles[0]);
-  const [simResult, setSimResult] = useState<SimulationResponse | null>(null);
+  const [assessment, setAssessment] = useState<SimulationAssessment | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
   const [dataStatus, setDataStatus] = useState<"demo" | "live" | "cached">("demo");
-  const [simulationOrigin, setSimulationOrigin] = useState<"backend" | "local">("backend");
   const hasBackendData = useRef(false);
   const fetchingVehicles = useRef(false);
 
@@ -99,14 +98,14 @@ export default function App() {
     setRefreshing(false);
   };
 
-  async function handleRunSimulation(params: SimulationRequest): Promise<SimulationResponse | null> {
+  async function handleRunSimulation(params: Required<SimulationRequest>): Promise<SimulationResponse | null> {
+    const request = { ...params };
     setLoading(true);
     setError(null);
-    setSimResult(null);
+    setAssessment(null);
     try {
-      const result = await client.runSimulation(params);
-      setSimulationOrigin("backend");
-      setSimResult(result);
+      const result = await client.runSimulation(request);
+      setAssessment({ request, response: result, origin: "backend" });
       return result;
     } catch (err) {
       if (err instanceof FleetApiError) {
@@ -167,12 +166,13 @@ export default function App() {
         recommendations: [
           riskLevel === "NOT_RECOMMENDED"
             ? "Route exceeds safe battery threshold. Consider intermediate fast charging or reduced HVAC."
+            : riskLevel === "CAUTION"
+            ? "Arrival margin is limited. Charge before departure or reduce demand and assess again."
             : "Energy margin is sufficient. Maintain Eco/Normal mode on highway sections.",
         ],
       };
 
-      setSimulationOrigin("local");
-      setSimResult(mockResponse);
+      setAssessment({ request, response: mockResponse, origin: "local" });
       return mockResponse;
     } finally {
       setLoading(false);
@@ -226,8 +226,7 @@ export default function App() {
               selectedVehicle={selectedVehicle}
               onSelectVehicle={setSelectedVehicle}
               onRunSimulation={handleRunSimulation}
-              simResult={simResult}
-              simulationOrigin={simulationOrigin}
+              assessment={assessment}
               loading={loading}
               error={error}
               refreshing={refreshing}
