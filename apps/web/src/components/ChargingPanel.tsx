@@ -36,7 +36,7 @@ export function ChargingPanel({
     return (
         <div className="charging-panel" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="panel-header">
-                <h3 className="panel-title">WAYPOINT CHARGING HUBS — ROUTE GT-6</h3>
+                <h3 className="panel-title">DEMO CHARGING HUBS — ROUTE GT-6</h3>
                 <span className="panel-badge" style={{ color: 'var(--accent-green)' }}>
                     ● {CHARGING_STATIONS.reduce((s, st) => s + st.available, 0)} PORTS OPEN
                 </span>

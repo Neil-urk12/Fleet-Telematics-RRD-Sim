@@ -354,9 +354,9 @@ export function MapPanel({
                     pointerEvents: 'none',
                 }}
             >
-                <h3 className="panel-title">LIVE ROUTE TELEMETRY — GT-6 PORTLAND → BEND</h3>
+                <h3 className="panel-title">DEMO ROUTE PLAYBACK — GT-6 PORTLAND → BEND</h3>
                 <span className="panel-badge" style={{ color: 'var(--accent-cyan)' }}>
-                    ● GPS ACTIVE
+                    ILLUSTRATIVE POSITIONS
                 </span>
             </div>
 

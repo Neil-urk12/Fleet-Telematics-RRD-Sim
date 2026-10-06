@@ -237,7 +237,7 @@ export function ElevationChart({
         ctx.fillStyle = 'rgba(148, 163, 184, 0.9)';
         ctx.fillText('  ▬  Elevation Profile', margin.left + 65, margin.top - 10);
         ctx.fillStyle = '#10b981';
-        ctx.fillText(`  ● Live Pos: ${currentDist.toFixed(1)} km`, margin.left + 175, margin.top - 10);
+        ctx.fillText(`  ● Demo Pos: ${currentDist.toFixed(1)} km`, margin.left + 175, margin.top - 10);
 
     }, [elevationData, socData, totalDistance, progressFraction, currentDist, currentElevation, currentSoc, hoverPoint]);
 
@@ -276,7 +276,7 @@ export function ElevationChart({
     return (
         <div className="elevation-panel" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <div className="panel-header">
-                <h3 className="panel-title">ELEVATION PROFILE &amp; STATE OF CHARGE DECAY</h3>
+                <h3 className="panel-title">DEMO ELEVATION &amp; LOCAL SOC ESTIMATE</h3>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <span className="panel-badge" style={{ color: 'var(--accent-cyan)' }}>
                         ALT: {Math.round(currentElevation)} m
@@ -286,6 +286,8 @@ export function ElevationChart({
                     </span>
                 </div>
             </div>
+
+            <p className="assessment-note">Portland–Bend illustration · Separate from the backend route assessment.</p>
 
             <canvas
                 ref={canvasRef}
