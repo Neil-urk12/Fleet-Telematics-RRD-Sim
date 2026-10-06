@@ -1,4 +1,4 @@
-from app.schemas.simulation import SimulationRequest, SimulationResponse
+from app.schemas.simulation import SimulationRequest, SimulationResponse, SimulationVehicleProfile
 from app.schemas.vehicle import Vehicle
 
 # Illustrative PoC calibration coefficients, not measured OEM performance.
@@ -115,6 +115,12 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
 
     return SimulationResponse(
         vehicle_id=vehicle.id,
+        vehicle_profile=SimulationVehicleProfile(
+            battery_capacity_kwh=vehicle.battery_capacity_kwh,
+            baseline_efficiency_wh_km=vehicle.baseline_efficiency_wh_km,
+            curb_mass_kg=vehicle.curb_mass_kg,
+            regen_efficiency=vehicle.regen_efficiency,
+        ),
         starting_soc_pct=vehicle.current_soc,
         starting_soh_pct=vehicle.current_soh,
         state_source=vehicle.state_source,

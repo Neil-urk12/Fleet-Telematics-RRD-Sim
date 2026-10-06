@@ -29,8 +29,18 @@ class SimulationRequest(BaseModel):
     )
 
 
+class SimulationVehicleProfile(BaseModel):
+    """Vehicle specifications actually used by an assessment."""
+
+    battery_capacity_kwh: float
+    baseline_efficiency_wh_km: float
+    curb_mass_kg: float
+    regen_efficiency: float
+
+
 class SimulationResponse(BaseModel):
     vehicle_id: str
+    vehicle_profile: SimulationVehicleProfile
     starting_soc_pct: float
     starting_soh_pct: float
     state_source: BatteryStateSource

@@ -1,3 +1,4 @@
+import { getSimulationVehicleProfile } from '@fleet/api-client';
 import type { Vehicle, TelemetryEvent, SimulationResponse } from '@fleet/api-client';
 
 // ── Mock Vehicles ────────────────────────────────────────────────
@@ -23,6 +24,7 @@ export const MOCK_TELEMETRY: Record<string, TelemetryEvent> = {
 // ── Mock Simulation Result ───────────────────────────────────────
 export const MOCK_SIMULATION: SimulationResponse = {
     vehicle_id: 'EV-001',
+    vehicle_profile: getSimulationVehicleProfile(MOCK_VEHICLES[0]),
     starting_soc_pct: 82.4,
     starting_soh_pct: 96.1,
     state_source: 'vehicle_defaults',

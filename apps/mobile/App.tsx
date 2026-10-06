@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { FleetApiError } from "@fleet/api-client";
+import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
 import type { SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
 
 import { client, API_URL } from "./src/config/api";
@@ -153,6 +153,7 @@ export default function App() {
 
       const mockResponse: SimulationResponse = {
         vehicle_id: vehicle.id,
+        vehicle_profile: getSimulationVehicleProfile(vehicle),
         starting_soc_pct: vehicle.current_soc,
         starting_soh_pct: vehicle.current_soh,
         state_source: vehicle.state_source,

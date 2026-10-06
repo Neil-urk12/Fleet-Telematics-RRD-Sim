@@ -124,8 +124,17 @@ export interface SimulationRequest {
   reserve_soc_target_pct?: number;
 }
 
+/** Specifications captured from the vehicle used by an assessment. */
+export type SimulationVehicleProfile = Required<Pick<Vehicle,
+  | "battery_capacity_kwh"
+  | "baseline_efficiency_wh_km"
+  | "curb_mass_kg"
+  | "regen_efficiency"
+>>;
+
 export interface SimulationResponse extends BatteryStateMetadata {
   vehicle_id: string;
+  vehicle_profile: SimulationVehicleProfile;
   starting_soc_pct: number;
   starting_soh_pct: number;
   usable_battery_capacity_kwh: number;
