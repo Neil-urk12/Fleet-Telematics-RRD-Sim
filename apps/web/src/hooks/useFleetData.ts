@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createFleetClient } from '@fleet/api-client';
-import type { Vehicle, TelemetryEvent, SimulationResponse, SimulationRequest } from '@fleet/api-client';
+import type { Vehicle, TelemetryEvent, SimulationAssessment, SimulationRequest } from '@fleet/api-client';
 import { MOCK_VEHICLES, MOCK_TELEMETRY } from '../mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -9,7 +9,7 @@ const api = createFleetClient({ baseUrl: API_BASE_URL });
 export function useFleetData(pollingIntervalMs: number = 5000) {
     const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
     const [telemetry, setTelemetry] = useState<Record<string, TelemetryEvent>>(MOCK_TELEMETRY);
-    const [simulation, setSimulation] = useState<SimulationResponse | null>(null);
+    const [assessment, setAssessment] = useState<SimulationAssessment | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [simulationError, setSimulationError] = useState<string | null>(null);
@@ -42,13 +42,14 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
         }
     }, []);
 
-    const runSimulation = useCallback(async (req: SimulationRequest) => {
+    const runSimulation = useCallback(async (req: Required<SimulationRequest>) => {
+        const request = { ...req };
         setIsSimulating(true);
         setSimulationError(null);
-        setSimulation(null);
+        setAssessment(null);
         try {
-            const result = await api.runSimulation(req);
-            setSimulation(result);
+            const response = await api.runSimulation(request);
+            setAssessment({ request, response, origin: 'backend' });
         } catch (err) {
             setSimulationError(err instanceof Error ? err.message : 'Simulation failed');
         } finally {
@@ -63,7 +64,7 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     }, [fetchData, pollingIntervalMs]);
 
     return {
-        vehicles, telemetry, simulation, loading, error, simulationError, dataStatus,
+        vehicles, telemetry, assessment, loading, error, simulationError, dataStatus,
         isSimulating, refetch: fetchData, runSimulation,
     };
 }

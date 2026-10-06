@@ -1,9 +1,5 @@
-import { formatBatteryState } from '@fleet/api-client';
-import type { SimulationResponse } from '@fleet/api-client';
-
 interface ChargingPanelProps {
     vehicles: Array<{ id: string; current_soc: number; battery_capacity_kwh: number; status: string; model?: string }>;
-    simulation: SimulationResponse | null;
     selectedVehicleId: string | null;
     selectedStationId?: string | null;
     onSelectStation?: (stationId: string) => void;
@@ -24,7 +20,6 @@ function availabilityColor(avail: number, total: number) {
 
 export function ChargingPanel({
     vehicles,
-    simulation,
     selectedVehicleId,
     selectedStationId,
     onSelectStation,
@@ -46,66 +41,6 @@ export function ChargingPanel({
                     ● {CHARGING_STATIONS.reduce((s, st) => s + st.available, 0)} PORTS OPEN
                 </span>
             </div>
-
-            {/* Simulation result HUD card for selected vehicle */}
-            {simulation && selectedVehicle && simulation.vehicle_id === selectedVehicleId && (
-                <div className="sim-result-card" style={{ marginBottom: '8px' }}>
-                    <div className="sim-result-header">
-                        <span className="ctrl-label" style={{ color: '#00c2ff', fontWeight: 700 }}>
-                            ⚡ SIMULATION PROJECTION — {selectedVehicleId}
-                        </span>
-                        <span className={`risk-badge risk-badge--${simulation.risk_level.toLowerCase()}`}>
-                            {simulation.risk_level} MARGIN
-                        </span>
-                    </div>
-                    <div className="sim-recommendation">
-                        {formatBatteryState(simulation)} · Starting SOC {simulation.starting_soc_pct.toFixed(1)}%
-                        {' / '}SOH {simulation.starting_soh_pct.toFixed(1)}%
-                    </div>
-                    <div className="sim-result-stats">
-                        <div>
-                            <span className="stat-label">ARRIVAL SOC</span>
-                            <span
-                                className="stat-value"
-                                style={{
-                                    fontSize: '13px',
-                                    color:
-                                        simulation.projected_arrival_soc_pct > 20
-                                            ? 'var(--accent-green)'
-                                            : simulation.projected_arrival_soc_pct > 10
-                                            ? 'var(--accent-yellow)'
-                                            : 'var(--accent-red)',
-                                }}
-                            >
-                                {simulation.projected_arrival_soc_pct.toFixed(1)}%
-                            </span>
-                        </div>
-                        <div>
-                            <span className="stat-label">ENERGY USE</span>
-                            <span className="stat-value" style={{ fontSize: '13px' }}>
-                                {simulation.estimated_energy_consumption_kwh.toFixed(1)} kWh
-                            </span>
-                        </div>
-                        <div>
-                            <span className="stat-label">REMAINING RANGE</span>
-                            <span className="stat-value" style={{ fontSize: '13px', color: 'var(--accent-cyan)' }}>
-                                {simulation.remaining_range_km.toFixed(0)} km
-                            </span>
-                        </div>
-                        <div>
-                            <span className="stat-label">CONFIDENCE</span>
-                            <span className="stat-value" style={{ fontSize: '13px' }}>
-                                {simulation.confidence_score_pct.toFixed(0)}%
-                            </span>
-                        </div>
-                    </div>
-                    {simulation.recommendations.length > 0 && (
-                        <div className="sim-recommendation">
-                            💡 {simulation.recommendations[0]}
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* Charging stations list */}
             <div className="charging-station-list" style={{ flex: 1, overflowY: 'auto' }}>

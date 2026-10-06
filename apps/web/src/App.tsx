@@ -5,7 +5,9 @@ import { Header } from './components/Header';
 import { FleetPanel } from './components/FleetPanel';
 import { ControlsBar } from './components/ControlsBar';
 import { RouteInputs } from './components/RouteInputs';
-import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericParameters } from '@fleet/api-client';
+import { SimulationResult } from './components/SimulationResult';
+import { isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
+import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
 import { ElevationChart } from './components/ElevationChart';
 import { ThermalMap } from './components/ThermalMap';
@@ -109,7 +111,7 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, simulation, loading, error, simulationError, dataStatus, isSimulating, runSimulation } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, isSimulating, runSimulation } = useFleetData();
 
     const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>('EV-001');
     const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
@@ -123,7 +125,26 @@ function App() {
     const [drivingStyle, setDrivingStyle] = useState<DrivingStyle>('NORMAL');
     const [hvacMode, setHvacMode] = useState<HvacMode>('LOW');
     const [regenLevel, setRegenLevel] = useState<RegenLevel>('MEDIUM');
-    const [payload, setPayload] = useState(450);
+    const [routeValues, setRouteValues] = useState<SimulationNumericDraft>({
+        route_distance_km: String(TOTAL_DISTANCE),
+        elevation_gain_m: String(DEMO_ELEVATION.gain),
+        elevation_loss_m: String(DEMO_ELEVATION.loss),
+        ambient_temp_c: '22',
+        payload_kg: '450',
+        reserve_soc_target_pct: '15',
+    });
+    const [roadType, setRoadType] = useState<RoadType>('MIXED');
+    const { parameters } = parseSimulationInputs(routeValues);
+    const payload = Number.isFinite(Number(routeValues.payload_kg))
+        ? Math.max(0, Number(routeValues.payload_kg)) : 0;
+    const currentRequest = parameters && selectedVehicleId ? {
+        ...parameters,
+        vehicle_id: selectedVehicleId,
+        road_type: roadType,
+        driving_style: drivingStyle,
+        hvac_mode: hvacMode,
+        regen_level: regenLevel,
+    } : null;
 
     const lastTimeRef = useRef<number>(performance.now());
 
@@ -267,15 +288,10 @@ function App() {
 
             <div className="assessment-toolbar">
                 <RouteInputs
-                    initialValues={{
-                        route_distance_km: String(TOTAL_DISTANCE),
-                        elevation_gain_m: String(DEMO_ELEVATION.gain),
-                        elevation_loss_m: String(DEMO_ELEVATION.loss),
-                        ambient_temp_c: '22',
-                        payload_kg: '450',
-                        reserve_soc_target_pct: '15',
-                    }}
-                    onPayloadChange={setPayload}
+                    values={routeValues}
+                    roadType={roadType}
+                    onValuesChange={setRouteValues}
+                    onRoadTypeChange={setRoadType}
                     onSubmit={handleRunSimulation}
                 />
                 <ControlsBar
@@ -295,6 +311,12 @@ function App() {
                     selectedVehicleId={selectedVehicleId}
                     isSimulating={isSimulating}
                 />
+                {assessment && (
+                    <SimulationResult
+                        assessment={assessment}
+                        isOutdated={isAssessmentOutdated(assessment, currentRequest, selectedVehicle)}
+                    />
+                )}
             </div>
 
             <div className="main-content">
@@ -340,7 +362,6 @@ function App() {
                 />
                 <ChargingPanel
                     vehicles={vehicles}
-                    simulation={simulation}
                     selectedVehicleId={selectedVehicleId}
                     selectedStationId={selectedStationId}
                     onSelectStation={setSelectedStationId}

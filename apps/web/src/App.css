@@ -4,11 +4,11 @@
 .dashboard {
     display: grid;
     height: 100vh;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto auto minmax(320px, 1fr) auto;
     grid-template-columns: minmax(0, 1fr);
     gap: 1px;
     background: var(--border-color);
-    overflow: hidden;
+    overflow: auto;
     position: relative;
 }
 
@@ -749,13 +749,89 @@
     transition: width 0.4s ease-out;
 }
 
-/* Simulation result card */
-.sim-result-card {
-    padding: var(--space-sm);
-    border: 1px solid rgba(0, 194, 255, 0.3);
-    border-radius: var(--radius-sm);
-    background: rgba(0, 194, 255, 0.05);
-    flex-shrink: 0;
+/* Results belong to the submitted assessment, separate from demo route panels. */
+.assessment-result {
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-panel);
+    border-top: 1px solid var(--accent-cyan);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.assessment-result h2 {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.assessment-result h3 {
+    font-size: 12px;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.assessment-result p {
+    margin: 4px 0;
+    line-height: 1.5;
+}
+
+.assessment-result-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-lg);
+    margin-top: var(--space-sm);
+}
+
+.assessment-note {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.assessment-outdated {
+    padding: 8px;
+    color: var(--accent-yellow);
+    border-left: 3px solid var(--accent-yellow);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.assessment-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    margin: var(--space-sm) 0;
+}
+
+.assessment-stats dd,
+.assessment-energy dd {
+    margin: 0;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.assessment-energy > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: 4px 0;
+}
+
+.assessment-energy-total {
+    border-top: 1px solid var(--border-color);
+    font-weight: 700;
+}
+
+.assessment-recommendations {
+    padding-left: 18px;
+    line-height: 1.5;
+}
+
+.assessment-recommendations li + li {
+    margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+    .assessment-result-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .sim-result-header {
@@ -763,25 +839,6 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-xs);
-}
-
-.sim-result-stats {
-    display: flex;
-    gap: var(--space-lg);
-    margin-bottom: var(--space-xs);
-}
-
-.sim-result-stats>div {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-}
-
-.sim-recommendation {
-    font-size: 9px;
-    color: var(--accent-yellow);
-    padding-top: var(--space-xs);
-    border-top: 1px solid var(--border-color);
 }
 
 .risk-badge {

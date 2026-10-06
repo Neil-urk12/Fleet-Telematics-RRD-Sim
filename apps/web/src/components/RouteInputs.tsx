@@ -3,14 +3,14 @@ import { parseSimulationInputs, simulationNumericFields } from '@fleet/api-clien
 import type { RoadType, SimulationNumericDraft, SimulationNumericParameters } from '@fleet/api-client';
 
 interface RouteInputsProps {
-    initialValues: SimulationNumericDraft;
-    onPayloadChange: (payload: number) => void;
+    values: SimulationNumericDraft;
+    roadType: RoadType;
+    onValuesChange: (values: SimulationNumericDraft) => void;
+    onRoadTypeChange: (roadType: RoadType) => void;
     onSubmit: (parameters: SimulationNumericParameters & { road_type: RoadType }) => void;
 }
 
-export function RouteInputs({ initialValues, onPayloadChange, onSubmit }: RouteInputsProps) {
-    const [values, setValues] = useState(initialValues);
-    const [roadType, setRoadType] = useState<RoadType>('MIXED');
+export function RouteInputs({ values, roadType, onValuesChange, onRoadTypeChange, onSubmit }: RouteInputsProps) {
     const [showErrors, setShowErrors] = useState(false);
     const { parameters, errors } = parseSimulationInputs(values);
 
@@ -49,11 +49,7 @@ export function RouteInputs({ initialValues, onPayloadChange, onSubmit }: RouteI
                                     aria-describedby={error ? `${field.key}-error` : undefined}
                                     onChange={event => {
                                         const value = event.target.value;
-                                        setValues(previous => ({ ...previous, [field.key]: value }));
-                                        if (field.key === 'payload_kg' && value.trim() &&
-                                            Number.isFinite(Number(value)) && Number(value) >= 0) {
-                                            onPayloadChange(Number(value));
-                                        }
+                                        onValuesChange({ ...values, [field.key]: value });
                                     }}
                                 />
                                 {error && (
@@ -66,7 +62,7 @@ export function RouteInputs({ initialValues, onPayloadChange, onSubmit }: RouteI
                     })}
                     <label className="route-field">
                         <span>Road type</span>
-                        <select value={roadType} onChange={event => setRoadType(event.target.value as RoadType)}>
+                        <select value={roadType} onChange={event => onRoadTypeChange(event.target.value as RoadType)}>
                             <option value="URBAN">Urban</option>
                             <option value="HIGHWAY">Highway</option>
                             <option value="MIXED">Mixed</option>
