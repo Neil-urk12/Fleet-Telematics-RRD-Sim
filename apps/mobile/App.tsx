@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View } from "react-native";
+import { AppState, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
 import type { SimulationAssessment, SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
 
-import { client, API_URL } from "./src/config/api";
+import { client } from "./src/config/api";
 import { colors } from "./src/constants/theme";
 import { BottomNavBar, type TabType } from "./src/navigation";
 import {
@@ -65,32 +65,51 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
   const [dataStatus, setDataStatus] = useState<"demo" | "live" | "cached">("demo");
+  const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
+  // Advance reading ages even when a failed fetch leaves the cached values unchanged.
+  const [, refreshReadingAges] = useState(Date.now);
   const hasBackendData = useRef(false);
   const fetchingVehicles = useRef(false);
 
-  useEffect(() => {
-    loadVehicles();
-  }, []);
-
-  async function loadVehicles() {
+  const loadVehicles = useCallback(async (showLoading = true) => {
     if (fetchingVehicles.current) return;
     fetchingVehicles.current = true;
-    setLoading(true);
-    setFleetError(null);
+    if (showLoading) setLoading(true);
     try {
       const data = await client.getVehicles();
       setVehicles(data);
       setSelectedVehicle(previous => data.find(vehicle => vehicle.id === previous?.id) ?? data[0] ?? null);
       hasBackendData.current = true;
+      setLastFetchedAt(new Date().toISOString());
       setDataStatus("live");
+      setFleetError(null);
     } catch (err) {
       setFleetError(err instanceof Error ? err.message : "Failed to load fleet");
       setDataStatus(hasBackendData.current ? "cached" : "demo");
     } finally {
       fetchingVehicles.current = false;
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    let active = AppState.currentState !== "background" && AppState.currentState !== "inactive";
+    const refresh = () => {
+      if (!active) return;
+      refreshReadingAges(Date.now());
+      void loadVehicles(false);
+    };
+    if (active) void loadVehicles();
+    const interval = setInterval(refresh, 5000);
+    const subscription = AppState.addEventListener("change", state => {
+      active = state === "active";
+      if (active) refresh();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [loadVehicles]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -189,12 +208,12 @@ export default function App() {
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
         <StatusBar style="light" />
 
-        {dataStatus !== "live" && (
-          <Text style={styles.dataBanner} accessibilityRole="text">
-            {dataStatus === "demo" ? "Offline demo fleet data" : "Connection lost — showing cached fleet data"}
-            {fleetError ? ` · ${fleetError}` : ""}
-          </Text>
-        )}
+        <Text style={styles.dataBanner} accessibilityRole="text">
+          {dataStatus === "live" ? "Backend connected" : dataStatus === "demo" ? "Demo fleet data" : "Connection lost — showing cached fleet data"}
+          {lastFetchedAt ? ` · Last fleet fetch: ${new Date(lastFetchedAt).toLocaleTimeString()}` : ""}
+          {" · Battery reading ages shown per vehicle."}
+          {fleetError ? ` · ${fleetError}` : ""}
+        </Text>
         {/* Screen Container */}
         <View style={styles.content}>
           {currentTab === "dashboard" && (
@@ -254,7 +273,7 @@ export default function App() {
         <BottomNavBar
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
-          alertCount={2}
+          alertCount={0}
         />
       </SafeAreaView>
     </SafeAreaProvider>
