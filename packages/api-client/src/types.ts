@@ -7,16 +7,26 @@ export interface BatteryStateMetadata {
   state_timestamp: string | null;
 }
 
-export function formatBatteryState(state: BatteryStateMetadata): string {
+export function formatReadingAge(timestamp: string | null | undefined, now = Date.now()): string {
+  const recordedAt = timestamp ? Date.parse(timestamp) : NaN;
+  if (!Number.isFinite(recordedAt)) return "Reading age unavailable";
+  const elapsed = now - recordedAt;
+  const minutes = Math.floor(Math.abs(elapsed) / 60_000);
+  const age = minutes < 1 ? "<1 min" : minutes < 60 ? `${minutes} min`
+    : minutes < 1440 ? `${Math.floor(minutes / 60)} h` : `${Math.floor(minutes / 1440)} d`;
+  return elapsed < 0 ? `Timestamp ${age} ahead of device clock` : `Reading age: ${age}`;
+}
+
+export function formatBatteryState(state: BatteryStateMetadata, now = Date.now()): string {
   const labels: Record<BatteryStateSource, string> = {
     telemetry: "Telemetry",
     vehicle_defaults: "Vehicle defaults",
     manual: "Manual update",
   };
   const label = labels[state.state_source] ?? "Source unavailable";
-  return state.state_timestamp
-    ? `${label} · ${new Date(state.state_timestamp).toLocaleString()}`
-    : label;
+  const recordedAt = state.state_timestamp ? Date.parse(state.state_timestamp) : NaN;
+  const date = Number.isFinite(recordedAt) ? `${new Date(recordedAt).toLocaleString()} · ` : "";
+  return `${label} · ${date}${formatReadingAge(state.state_timestamp, now)}`;
 }
 
 export interface Vehicle extends BatteryStateMetadata {
