@@ -23,10 +23,6 @@ const VEHICLE_COLORS = ['#00c2ff', '#10b981', '#f59e0b', '#a78bfa', '#ef4444', '
 export function BatteryHealthChart({ vehicles, selectedVehicleId }: BatteryHealthChartProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    const avgSoh = vehicles.reduce((s, v) => s + v.current_soh, 0) / (vehicles.length || 1);
-    const startAvg = vehicles.reduce((s, v) => s + (SOH_HISTORY[v.id]?.[0] ?? v.current_soh), 0) / (vehicles.length || 1);
-    const degradationRate = (startAvg - avgSoh) / MONTHS.length;
-
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -147,11 +143,12 @@ export function BatteryHealthChart({ vehicles, selectedVehicleId }: BatteryHealt
     return (
         <div className="health-panel" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="panel-header">
-                <h3 className="panel-title">BATTERY STATE OF HEALTH (SOH) — 7-MO DEGRADATION</h3>
+                <h3 className="panel-title">DEMO SOH HISTORY — 7 MONTHS</h3>
                 <span className="panel-badge" style={{ color: 'var(--accent-yellow)' }}>
-                    AVG −{degradationRate.toFixed(2)}%/mo
+                    ILLUSTRATIVE TRENDS
                 </span>
             </div>
+            <p className="data-note">Fixed example history. Current SOH and reading age appear in the fleet list.</p>
             <canvas ref={canvasRef} style={{ width: '100%', flex: 1, minHeight: 0 }} />
         </div>
     );

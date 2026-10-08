@@ -18,7 +18,7 @@ export function FleetPanel({ vehicles, selectedId, onSelect }: FleetPanelProps) 
         <aside className="fleet-panel">
             <div className="panel-header">
                 <h2 className="panel-title">FLEET STATUS</h2>
-                <span className="panel-badge">{filteredVehicles.length} / {vehicles.length} ACTIVE</span>
+                <span className="panel-badge">{filteredVehicles.length} / {vehicles.length} REGISTERED</span>
             </div>
             <div className="fleet-search-container">
                 <input

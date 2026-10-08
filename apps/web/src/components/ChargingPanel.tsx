@@ -67,7 +67,7 @@ export function ChargingPanel({
                                         {st.name}
                                         {st.id === 'CS-02' && (
                                             <span style={{ fontSize: '8px', padding: '1px 4px', background: 'rgba(0,194,255,0.15)', color: 'var(--accent-cyan)', borderRadius: '2px' }}>
-                                                RECOMMENDED
+                                                DEMO SUGGESTION
                                             </span>
                                         )}
                                     </div>
