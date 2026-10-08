@@ -63,7 +63,7 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
     >
       <Header
         title="Fleet Management"
-        subtitle="Live Electric Commercial Vehicles"
+        subtitle="Registered Vehicles · See Battery Source and Reading Age"
       />
 
       {error && <ErrorBanner message={error} onRetry={onRefresh} />}
@@ -160,7 +160,7 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
             </View>
 
             <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Estimated Full Range</Text>
+              <Text style={styles.specLabel}>Nominal Full Range (estimate)</Text>
               <Text style={styles.specVal}>
                 {Math.round(
                   (selectedVehicle.battery_capacity_kwh * 1000) /

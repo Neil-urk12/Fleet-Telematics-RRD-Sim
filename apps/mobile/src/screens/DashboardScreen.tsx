@@ -54,8 +54,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
     >
       <Header
-        title="Live Tracking"
-        subtitle="Real-Time Operation & Route Decision Support"
+        title="Fleet Overview"
+        subtitle="Vehicle State & Route Decision Support"
       />
 
       {/* KPI Stats Grid */}
@@ -75,7 +75,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <MaterialCommunityIcons name="battery-charging-high" size={18} color="#2ECC71" />
           </View>
           <Text style={styles.statValue}>{avgSoc}%</Text>
-          <Text style={styles.statSub}>Good reserve status</Text>
+          <Text style={styles.statSub}>Reported fleet snapshot</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -83,8 +83,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <Text style={styles.statLabel}>Energy Consumed</Text>
             <MaterialCommunityIcons name="lightning-bolt" size={18} color="#F1C40F" />
           </View>
-          <Text style={styles.statValue}>142 kWh</Text>
-          <Text style={styles.statSub}>Today's telemetry</Text>
+          <Text style={styles.statValue}>Unavailable</Text>
+          <Text style={styles.statSub}>Daily energy use is not collected</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -92,8 +92,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <Text style={styles.statLabel}>Active Warnings</Text>
             <MaterialCommunityIcons name="alert-circle" size={18} color="#E74C3C" />
           </View>
-          <Text style={styles.statValue}>2</Text>
-          <Text style={styles.statSub}>1 Low SOC warning</Text>
+          <Text style={styles.statValue}>Unavailable</Text>
+          <Text style={styles.statSub}>Live alerts are not connected</Text>
         </View>
       </View>
 
@@ -110,7 +110,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           <View style={styles.actionBannerText}>
             <Text style={styles.bannerTitle}>Physics Energy Simulator</Text>
             <Text style={styles.bannerSubtitle}>
-              Predict arrival SOC with aero drag, payload & elevation
+              Estimate arrival SOC with route conditions, payload & elevation
             </Text>
           </View>
         </View>
@@ -119,7 +119,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
       {/* Fleet Live Telemetry Snapshot */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Live Telematics Feed</Text>
+        <Text style={styles.sectionTitle}>Fleet Battery Snapshots</Text>
         <TouchableOpacity onPress={() => onNavigateTab("fleet")}>
           <Text style={styles.sectionLink}>View All ({totalVehicles})</Text>
         </TouchableOpacity>
