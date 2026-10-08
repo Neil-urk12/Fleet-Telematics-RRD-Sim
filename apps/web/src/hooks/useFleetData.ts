@@ -14,6 +14,8 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     const [error, setError] = useState<string | null>(null);
     const [simulationError, setSimulationError] = useState<string | null>(null);
     const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'cached'>('demo');
+    const [readingTime, setReadingTime] = useState(Date.now);
+    const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
     const [isSimulating, setIsSimulating] = useState(false);
     const fetching = useRef(false);
     const hasBackendData = useRef(false);
@@ -31,6 +33,7 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
                 Object.entries(fleetTelemetry.data).filter(([id]) => vehicleIds.has(id))
             ));
             hasBackendData.current = true;
+            setLastFetchedAt(new Date().toISOString());
             setDataStatus('live');
             setError(null);
         } catch (err) {
@@ -59,12 +62,16 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, pollingIntervalMs);
+        const interval = setInterval(() => {
+            setReadingTime(Date.now());
+            void fetchData();
+        }, pollingIntervalMs);
         return () => clearInterval(interval);
     }, [fetchData, pollingIntervalMs]);
 
     return {
         vehicles, telemetry, assessment, loading, error, simulationError, dataStatus,
+        readingTime, lastFetchedAt,
         isSimulating, refetch: fetchData, runSimulation,
     };
 }

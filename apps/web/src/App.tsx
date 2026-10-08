@@ -6,7 +6,7 @@ import { FleetPanel } from './components/FleetPanel';
 import { ControlsBar } from './components/ControlsBar';
 import { RouteInputs } from './components/RouteInputs';
 import { SimulationResult } from './components/SimulationResult';
-import { isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
+import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
 import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
 import { ElevationChart } from './components/ElevationChart';
@@ -111,7 +111,7 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, isSimulating, runSimulation } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation } = useFleetData();
 
     const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>('EV-001');
     const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
@@ -261,32 +261,36 @@ function App() {
 
     return (
         <div className="dashboard">
-            {/* ── Backend status banners ────────────────────────────────── */}
-            {loading && (
-                <div className="api-banner api-banner--loading">
-                    Connecting to fleet backend — showing demo data…
-                </div>
-            )}
-            {!loading && error && (
-                <div className="api-banner api-banner--error">
-                    {dataStatus === 'demo' ? 'Offline demo data' : 'Connection lost — showing cached fleet data'}. ({error})
-                </div>
-            )}
-
-            {simulationError && (
-                <div className="api-banner api-banner--error" role="alert">
-                    Simulation unavailable: {simulationError}
-                </div>
-            )}
-
             <Header
                 fleetCount={vehicles.length}
                 routeDistance={TOTAL_DISTANCE}
-                avgBattery={67.48}
                 batteryHealth={Math.round(avgSoh * 10) / 10}
             />
 
             <div className="assessment-toolbar">
+                {/* ── Backend status banners ────────────────────────────────── */}
+                {loading && (
+                    <div className="api-banner api-banner--loading">
+                        Connecting to fleet backend — showing demo data…
+                    </div>
+                )}
+                {!loading && error && (
+                    <div className="api-banner api-banner--error">
+                        {dataStatus === 'demo' ? 'Offline demo data' : 'Connection lost — showing cached fleet data'}. ({error})
+                    </div>
+                )}
+                <div className="api-banner">
+                    {dataStatus === 'live' ? 'Backend connected' : dataStatus === 'cached' ? 'Cached backend fleet' : 'Demo fleet'}
+                    {lastFetchedAt && ` · Last fleet fetch: ${new Date(lastFetchedAt).toLocaleTimeString()}`}
+                    {' · Battery reading ages shown per vehicle; connection status does not establish freshness.'}
+                </div>
+
+                {simulationError && (
+                    <div className="api-banner api-banner--error" role="alert">
+                        Simulation unavailable: {simulationError}
+                    </div>
+                )}
+
                 <RouteInputs
                     values={routeValues}
                     roadType={roadType}
@@ -346,6 +350,9 @@ function App() {
                     maxTemp={maxTemp}
                     avgTemp={avgTemp}
                     packHealthPct={activeVehicle.current_soh}
+                    readingLabel={selectedTelemetry
+                        ? `${dataStatus === 'demo' ? 'Demo' : 'Reported'} pack temperature: ${selectedTelemetry.pack_temp_c.toFixed(1)}°C · ${formatReadingAge(selectedTelemetry.timestamp, readingTime)}`
+                        : 'Pack temperature unavailable · Illustrative baseline 31.5°C'}
                 />
             </div>
 
@@ -355,7 +362,6 @@ function App() {
                     selectedVehicleId={selectedVehicleId}
                 />
                 <RegenBrakingPanel
-                    telemetry={telemetry}
                     vehicles={vehicles}
                     selectedVehicleId={selectedVehicleId}
                     regenLevel={regenLevel}

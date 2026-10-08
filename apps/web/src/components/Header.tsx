@@ -1,11 +1,10 @@
 interface HeaderProps {
     fleetCount: number;
     routeDistance: number;
-    avgBattery: number;
     batteryHealth: number;
 }
 
-export function Header({ fleetCount, routeDistance, avgBattery, batteryHealth }: HeaderProps) {
+export function Header({ fleetCount, routeDistance, batteryHealth }: HeaderProps) {
     return (
         <header className="dashboard-header">
             <div className="header-left">
@@ -13,15 +12,14 @@ export function Header({ fleetCount, routeDistance, avgBattery, batteryHealth }:
                     EV FLEET TELEMATICS — ROUTE DEGRADATION SIMULATOR
                 </h1>
                 <span className="header-subtitle">
-                    ROUTE GT-6 PORTLAND → BEND&nbsp;|&nbsp;SIM ID: EVSIM-2024&nbsp;|&nbsp;STATUS:&nbsp;
-                    <span className="status-dot status-running" />&nbsp;RUNNING
+                    DEMO ROUTE GT-6 PORTLAND → BEND&nbsp;|&nbsp;ILLUSTRATIVE PLAYBACK
                 </span>
             </div>
 
             <div className="header-stats">
-                <StatCard label="FLEET VEHICLES" value={`${fleetCount} ACTIVE`} />
-                <StatCard label="ROUTE DISTANCE" value={`${routeDistance} KM`} />
-                <StatCard label="AVG BATTERY AGE" value={`${avgBattery} mo`} />
+                <StatCard label="FLEET VEHICLES" value={`${fleetCount} REGISTERED`} />
+                <StatCard label="DEMO ROUTE DISTANCE" value={`${routeDistance} KM`} />
+                <StatCard label="AVG BATTERY AGE" value="Unavailable" />
                 <StatCard label="FLEET SOH" value={`${batteryHealth}%`} />
             </div>
         </header>
