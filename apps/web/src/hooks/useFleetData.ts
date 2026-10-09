@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createFleetClient } from '@fleet/api-client';
-import type { Vehicle, TelemetryEvent, SimulationAssessment, SimulationRequest } from '@fleet/api-client';
+import type { BatchSimulationRequest, Vehicle, TelemetryEvent, SimulationAssessment, SimulationRequest } from '@fleet/api-client';
 import { MOCK_VEHICLES, MOCK_TELEMETRY } from '../mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -60,6 +60,8 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
         }
     }, []);
 
+    const runBatchSimulation = useCallback((req: BatchSimulationRequest) => api.runBatchSimulation(req), []);
+
     useEffect(() => {
         fetchData();
         const interval = setInterval(() => {
@@ -72,6 +74,6 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     return {
         vehicles, telemetry, assessment, loading, error, simulationError, dataStatus,
         readingTime, lastFetchedAt,
-        isSimulating, refetch: fetchData, runSimulation,
+        isSimulating, refetch: fetchData, runSimulation, runBatchSimulation,
     };
 }
