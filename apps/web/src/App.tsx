@@ -6,6 +6,7 @@ import { FleetPanel } from './components/FleetPanel';
 import { ControlsBar } from './components/ControlsBar';
 import { RouteInputs } from './components/RouteInputs';
 import { SimulationResult } from './components/SimulationResult';
+import { FleetComparison } from './components/FleetComparison';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
 import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
@@ -111,7 +112,7 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation } = useFleetData();
 
     const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>('EV-001');
     const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
@@ -212,6 +213,7 @@ function App() {
         state_timestamp: null,
     };
     const selectedTelemetry = selectedVehicleId ? telemetry[selectedVehicleId] : null;
+    const assessmentOutdated = assessment ? isAssessmentOutdated(assessment, currentRequest, selectedVehicle) : false;
 
     // Dynamically calculate State of Charge curve for the selected vehicle
     const socData = useMemo(() => {
@@ -318,8 +320,23 @@ function App() {
                 {assessment && (
                     <SimulationResult
                         assessment={assessment}
-                        isOutdated={isAssessmentOutdated(assessment, currentRequest, selectedVehicle)}
-                    />
+                        isOutdated={assessmentOutdated}
+                    >
+                        <FleetComparison
+                            assessment={assessment}
+                            currentRequest={currentRequest}
+                            vehicles={vehicles}
+                            isOutdated={assessmentOutdated}
+                            isConnected={dataStatus === 'live'}
+                            readingTime={readingTime}
+                            runComparison={runBatchSimulation}
+                            onSelectAndAssess={vehicleId => {
+                                if (isSimulating || !currentRequest) return;
+                                setSelectedVehicleId(vehicleId);
+                                void runSimulation({ ...currentRequest, vehicle_id: vehicleId });
+                            }}
+                        />
+                    </SimulationResult>
                 )}
             </div>
 

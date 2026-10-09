@@ -1,12 +1,14 @@
 import { formatBatteryState, formatSimulationConditions, getSimulationEnergyBreakdown } from '@fleet/api-client';
+import type { ReactNode } from 'react';
 import type { SimulationAssessment } from '@fleet/api-client';
 
 interface SimulationResultProps {
     assessment: SimulationAssessment;
     isOutdated: boolean;
+    children?: ReactNode;
 }
 
-export function SimulationResult({ assessment, isOutdated }: SimulationResultProps) {
+export function SimulationResult({ assessment, isOutdated, children }: SimulationResultProps) {
     const { request, response: result } = assessment;
     const breakdown = getSimulationEnergyBreakdown(result);
 
@@ -65,6 +67,7 @@ export function SimulationResult({ assessment, isOutdated }: SimulationResultPro
                     </ul>
                 </div>
             </div>
+            {children}
         </section>
     );
 }

@@ -832,6 +832,49 @@
     margin-top: 6px;
 }
 
+.fleet-comparison {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border-color);
+}
+
+.fleet-comparison .sim-result-header {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.fleet-comparison-scroll {
+    overflow-x: auto;
+}
+
+.fleet-comparison button:focus-visible,
+.fleet-comparison-scroll:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+.fleet-comparison-table {
+    width: 100%;
+    min-width: 720px;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.fleet-comparison-table caption {
+    text-align: left;
+    padding: var(--space-sm) 0;
+}
+
+.fleet-comparison-table th,
+.fleet-comparison-table td {
+    padding: var(--space-sm);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fleet-comparison-table th p {
+    font-weight: 400;
+}
+
 @media (max-width: 900px) {
     .assessment-result-grid {
         grid-template-columns: 1fr;
