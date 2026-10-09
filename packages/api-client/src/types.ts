@@ -134,6 +134,20 @@ export interface SimulationRequest {
   reserve_soc_target_pct?: number;
 }
 
+export interface BatchSimulationRequest extends Omit<SimulationRequest, "vehicle_id"> {
+  vehicle_ids?: string[] | null;
+}
+
+export interface BatchSimulationResult {
+  vehicle_id: string;
+  response?: SimulationResponse | null;
+  error?: string | null;
+}
+
+export interface BatchSimulationResponse {
+  results: BatchSimulationResult[];
+}
+
 /** Specifications captured from the vehicle used by an assessment. */
 export type SimulationVehicleProfile = Required<Pick<Vehicle,
   | "battery_capacity_kwh"

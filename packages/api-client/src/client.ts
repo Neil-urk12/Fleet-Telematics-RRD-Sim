@@ -1,4 +1,6 @@
 import type {
+  BatchSimulationRequest,
+  BatchSimulationResponse,
   BatchTelemetryRequest,
   BatchTelemetryResponse,
   FleetTelemetryResponse,
@@ -137,6 +139,13 @@ export class FleetApiClient {
   // Simulation
   async runSimulation(req: SimulationRequest): Promise<SimulationResponse> {
     return this.fetchJson<SimulationResponse>("/api/simulation/run", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
+  async runBatchSimulation(req: BatchSimulationRequest): Promise<BatchSimulationResponse> {
+    return this.fetchJson<BatchSimulationResponse>("/api/simulation/batch", {
       method: "POST",
       body: JSON.stringify(req),
     });
