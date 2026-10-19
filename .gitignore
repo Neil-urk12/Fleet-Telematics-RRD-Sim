@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# k6 output
+results*.json
+
 # Python
 __pycache__/
 *.py[cod]
