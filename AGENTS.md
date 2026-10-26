@@ -26,7 +26,8 @@ every listed capability exists in this repository.
   offline simulation approximation; `src/screens/` contains dashboard, fleet,
   simulator, alerts, and more screens. Read `apps/mobile/AGENTS.md` before editing.
 - `packages/api-client/` — Shared TypeScript types, typed HTTP client, and numeric
-  route-input parsing/validation in `src/`.
+  route-input parsing/validation in `src/`. `check-*.mjs` are standalone
+  `node:assert` checks for the shared client, run via `pnpm test:client`.
 - `backend/` — FastAPI, Python 3.11, managed with `uv`.
   - `app/main.py` — CORS and routers under `/api/{vehicles,telemetry,simulation}`;
     `/api/health` health check.
@@ -34,10 +35,15 @@ every listed capability exists in this repository.
     simulation single/batch/comparison and saved-run history.
   - `app/core/fleet_state.py` — shared, locked, process-local vehicle and telemetry
     stores; battery state ordering and provenance.
+  - `app/core/persistence.py` — SQLite storage for vehicles, vehicle/telemetry history,
+    and saved simulations; writes commit before changing the process-local caches.
   - `app/core/simulator.py` — `calculate_simulation(req, vehicle)` and route-energy
     calibration coefficients.
+  - `app/core/battery_history.py` — operational-history stress overlay and its
+    calibration coefficients.
   - `app/schemas/` — Pydantic v2 validation and request/response models.
-  - `tests/` — standard-library unittest coverage for current state and route energy.
+  - `tests/` — standard-library unittest coverage for current state, route energy,
+    and the history overlay.
 - `k6/` — smoke/load scripts.
 - `apps/web/vite.config.ts` — `/api` proxy to `http://127.0.0.1:8000`.
 
@@ -52,6 +58,7 @@ Root (pnpm workspace):
 - `pnpm --filter @fleet/mobile exec tsc --noEmit` — mobile TypeScript check.
 - `pnpm --filter @fleet/mobile android` / `ios` / `web` — targeted Expo startup.
 - `pnpm test:smoke` / `pnpm test:load` — k6 checks (requires k6 and a running backend).
+- `pnpm test:client` — standalone shared-client checks (no backend or browser needed).
 
 From `backend/`:
 
@@ -83,24 +90,37 @@ single/batch/comparison simulation → `calculate_simulation()` → response and
   preserve battery provenance.
 - Vehicle and simulation responses expose `state_source` and `state_timestamp`;
   simulations record `starting_soc_pct` and `starting_soh_pct` actually used.
+- Vehicle responses also expose the derived `battery_history` assessment.
+  Assessments record the history indicators they used in `vehicle_profile`, so
+  editing a vehicle's reported history marks an existing assessment outdated.
 - Unreported vehicles return `data: null` from latest telemetry. There is no synthetic
   live telemetry fallback. Simulations can use the registered vehicle defaults.
 - Telemetry over five minutes in the future is rejected with 422. Invalid batch
   payloads fail validation before writes; unknown IDs are reported per batch item.
 - Deleting a vehicle clears its vehicle/telemetry state and history. Saved simulation
   records retain their original values even if the ID is recreated.
-- All stores are in memory and lost on restart. Run one backend process so requests
-  share state. No auth, database, or migrations are implemented.
+- Stores persist in SQLite (`backend/data/fleet.sqlite3`, configurable with
+  `DATABASE_PATH`) and load into memory at application startup. Demo vehicles seed
+  only a new database. Run one backend process with lifespan enabled so requests
+  share the caches. Tests without lifespan use isolated in-memory state; persistence
+  tests use temporary databases. No auth or schema upgrade migrations are implemented.
 
 ## Simulator Behavior
 
 Inputs include distance, ascent (`elevation_gain_m`), descent (`elevation_loss_m`), road
 type, ambient temperature, payload, driving style, HVAC, regen, and reserve (0–50%).
-Vehicle profiles include positive `curb_mass_kg` (default 2500) and
-`regen_efficiency` (0–1, default 0.60).
+Vehicle profiles include positive `curb_mass_kg` (default 2500),
+`regen_efficiency` (0–1, default 0.60), and optional reported operating history:
+`cycle_count`, `avg_dod_pct`, `fast_charge_share_pct`, `thermal_stress_index`.
 
 - SOH scales nominal capacity. Temperature factors: <0°C 0.80, <15°C 0.90,
   >35°C 0.95, otherwise 1.0.
+- The history overlay sits between SOH and temperature in the capacity chain. It
+  scores the reported indicators into a 0–100 stress score and a NORMAL /
+  ELEVATED / HIGH class, then applies a factor of `1 − 0.04 × score / 100`.
+  Unreported indicators are excluded and the remaining weights renormalized; a
+  vehicle with no reported history is not adjusted and reports a null score and
+  class. Reported zeros are assessed normally.
 - Propulsion uses road (URBAN 1.05 / HIGHWAY 1.15 / MIXED 1.0), style (ECO 0.88 /
   NORMAL 1.0 / AGGRESSIVE 1.25), and payload (`1 + 0.125 × payload / curb mass`).
 - HVAC adds OFF 0 / LOW 15 / MEDIUM 30 / HIGH 55 Wh/km, independently of road type.
@@ -117,15 +137,15 @@ Vehicle profiles include positive `curb_mass_kg` (default 2500) and
   otherwise NOT_RECOMMENDED (88). Recommendations and confidence remain heuristic.
 
 These are PoC calibration assumptions, not measured OEM performance. No segment-order,
-battery headroom, or regen power-limit model is implemented. History stress and
-calibrated uncertainty are still design targets.
+battery headroom, or regen power-limit model is implemented. Calibrated uncertainty
+is still a design target.
 
 ## UI Boundaries & Gotchas
 
 - Web map playback and its elevation/SOC chart use a fixed illustrative Portland–Bend
   route. The chart and mobile offline simulation use approximations distinct from the
-  backend. Mobile offline estimates exclude temperature, road type, descent, and regen.
-  Keep demo/cached/local estimates visibly identified.
+  backend. Mobile offline estimates exclude temperature, road type, descent, regen,
+  and history stress. Keep demo/cached/local estimates visibly identified.
 - Route assessment inputs must be explicit and editable, and sent through the shared
   `SimulationRequest` contract. Keep negative temperatures valid, distance positive,
   ascent/descent/payload nonnegative, and reserve within 0–50%; reject blank/nonfinite

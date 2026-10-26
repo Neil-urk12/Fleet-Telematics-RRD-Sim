@@ -41,8 +41,35 @@ Recreating the ID starts with defaults; previous simulation records remain avail
 A vehicle without usable battery capacity produces 422 for single/comparison runs,
 or a per-item error in a batch run.
 
-All stores are in memory and are lost on restart. Run one backend process so all
-requests see the same stores.
+## Local persistence
+
+Vehicles, battery provenance, vehicle/telemetry histories, and saved simulations
+persist in SQLite at `backend/data/fleet.sqlite3` by default. Set `DATABASE_PATH`
+in the environment or backend `.env` to use another file; relative paths resolve
+from the server's working directory. SQLite uses Python's standard library.
+The data directory is created on startup and excluded from version control.
+
+The first startup seeds the six demo vehicles. Subsequent startups restore the
+saved fleet, including an intentionally empty fleet; deleted vehicles are not
+reseeded. Saved simulations remain independent of vehicle deletion/recreation.
+The API contracts and battery timestamp ordering rules are unchanged.
+
+Writes commit before the shared in-memory cache changes. Each vehicle change or
+telemetry event commits its current state and related history together. Storage
+write failures return 503 without applying that change in memory. Batch items and
+comparison runs are saved individually; earlier successful writes remain if a
+later item fails. Invalid request payloads still fail before any writes.
+Unreadable, invalid, or unsupported-version databases fail startup rather than
+silently resetting fleet data.
+
+Run **one backend worker** with the default application lifespan enabled: current
+state and history are cached in that process. History is loaded into memory on
+startup; larger deployments need database-backed queries and pagination.
+
+To back up or move the database, stop the backend and copy the database file.
+Keep that file when rolling back code; older versions ignore it and use volatile
+memory, so their subsequent changes will not be saved to it. State held only in
+an older running server's memory is not automatically imported on upgrade.
 
 ## Route energy model
 
@@ -67,6 +94,51 @@ recovery = curb mass × recovery per kg
            + min(payload × recovery per kg, payload demand)
 net route energy = propulsion + HVAC + climb − capped recovery
 ```
+
+## Operational-history overlay
+
+Vehicles may report their operating history: `cycle_count` (equivalent full
+cycles), `avg_dod_pct` (average depth of discharge), `fast_charge_share_pct`
+(share of charging energy taken from DC fast charging), and
+`thermal_stress_index` (0-100). Each is optional; `null` means the history was
+not reported, and registration and PATCH accept them like the other vehicle
+specifications. The demo fleet carries illustrative values that are not
+measured fleet data.
+
+The overlay turns the reported indicators into a 0-100 stress score and a
+`NORMAL` / `ELEVATED` / `HIGH` classification, then applies a bounded capacity
+factor:
+
+```text
+cycle   = min(cycle count / 1500, 1)
+DoD     = clamp((average DoD % − 50) / 50, 0, 1)
+fast    = min(fast-charge share % / 50, 1)
+thermal = thermal stress index / 100
+score   = 100 × (0.30·cycle + 0.30·DoD + 0.20·fast + 0.20·thermal)
+factor  = 1 − 0.04 × score / 100
+```
+
+The factor multiplies the SOH-adjusted capacity, so the available-capacity
+chain is nominal capacity → SOH → history → temperature. Unreported indicators
+are excluded and the remaining weights are renormalized, so a partially
+reported vehicle is not penalized for missing data. A vehicle with no reported
+history is not adjusted and is reported as unassessed
+(`stress_score` and `stress_class` are `null`). Reported zeros are assessed
+normally and are distinct from unreported history.
+
+SOH already reflects a vehicle's accumulated degradation, so this overlay models
+the residual stress that SOH does not yet show; that is why its effect is
+capped at 4% of usable capacity. The reference points (1500 cycles, a 50%
+neutral depth of discharge, a 50% fast-charge share) and the weights are
+**heuristic PoC calibration assumptions**, not measured OEM degradation data.
+The overlay changes usable capacity, arrival SOC, and remaining range; it does
+not change route energy demand, risk thresholds, or the fixed confidence
+scores.
+
+Vehicle responses include the derived `battery_history` assessment, and
+assessments report the `battery_history` they used along with the history
+indicators in `vehicle_profile`. Editing a vehicle's reported history therefore
+marks an existing assessment as outdated.
 
 Road multipliers are `URBAN=1.05`, `HIGHWAY=1.15`, `MIXED=1.0`; regen multipliers
 are `OFF=0`, `LOW=0.35`, `MEDIUM=0.65`, `HIGH=1.0`. These and the default vehicle
@@ -122,10 +194,14 @@ a backend connection and writes saved runs through the existing batch endpoint.
 The web SOC chart and mobile offline estimate still use their own approximations.
 The map and SOC chart are labeled as an illustrative Portland–Bend route, separate
 from the submitted backend assessment. Mobile offline results identify the omitted
-temperature, SOH scaling, road type, descent, and regen effects; they show no energy
-breakdown or confidence percentage when those are unavailable.
+temperature, SOH scaling, road type, descent, regen, and history-stress effects;
+they show no energy breakdown or confidence percentage when those are unavailable.
 
 ## Verification
+
+Persistence tests use temporary databases and check restarts, timestamp ordering,
+deletion/recreation, all simulation modes, and failed-write rollback. They do not
+modify the local fleet database.
 
 ```sh
 uv run python -m unittest discover -s tests -v
@@ -138,4 +214,5 @@ From the repository root, the standalone shared-client checks are:
 ```sh
 node packages/api-client/check-reading-age.mjs
 node packages/api-client/check-fleet-comparison.mjs
+node packages/api-client/check-battery-history.mjs
 ```
