@@ -1,11 +1,13 @@
-"""Process-local fleet state shared by vehicle, telemetry, and simulation routes."""
+"""Shared fleet cache with SQLite writes committed before in-memory updates."""
 
 from datetime import UTC, datetime
 from threading import RLock
 
+from app.core import persistence
 from app.schemas.telemetry import TelemetryEvent
 from app.schemas.vehicle import Vehicle, VehicleCreate, VehicleHistoryEntry, VehicleUpdate
 
+# shortcut: caches are process-local; use database-backed reads before adding workers.
 LOCK = RLock()
 
 MOCK_FLEET: dict[str, Vehicle] = {
@@ -113,14 +115,50 @@ LATEST_TELEMETRY: dict[str, TelemetryEvent] = {}
 TELEMETRY_HISTORY: dict[str, list[TelemetryEvent]] = {}
 
 
-def _record_history(vehicle: Vehicle, timestamp: datetime | None = None) -> None:
-    VEHICLE_HISTORY.setdefault(vehicle.id, []).append(
-        VehicleHistoryEntry(
-            timestamp=timestamp or datetime.now(UTC),
-            current_soc=vehicle.current_soc,
-            current_soh=vehicle.current_soh,
-            status=vehicle.status,
+DEMO_FLEET = list(MOCK_FLEET.values())
+
+
+def restore() -> None:
+    """Validate all persisted records before replacing the in-process snapshot."""
+    db = persistence.connection
+    if db is None:
+        raise RuntimeError("Fleet database is not open")
+    vehicles = {
+        vehicle.id: vehicle
+        for (payload,) in db.execute("SELECT payload FROM vehicles ORDER BY rowid")
+        for vehicle in [Vehicle.model_validate_json(payload)]
+    }
+    histories: dict[str, list[VehicleHistoryEntry]] = {}
+    for vehicle_id, payload in db.execute(
+        "SELECT vehicle_id, payload FROM vehicle_history ORDER BY id"
+    ):
+        histories.setdefault(vehicle_id, []).append(
+            VehicleHistoryEntry.model_validate_json(payload)
         )
+    events: dict[str, list[TelemetryEvent]] = {}
+    latest: dict[str, TelemetryEvent] = {}
+    for vehicle_id, payload in db.execute("SELECT vehicle_id, payload FROM telemetry ORDER BY id"):
+        event = TelemetryEvent.model_validate_json(payload)
+        events.setdefault(vehicle_id, []).append(event)
+        if vehicle_id not in latest or event.timestamp >= latest[vehicle_id].timestamp:
+            latest[vehicle_id] = event
+    with LOCK:
+        for store, restored in (
+            (MOCK_FLEET, vehicles),
+            (VEHICLE_HISTORY, histories),
+            (LATEST_TELEMETRY, latest),
+            (TELEMETRY_HISTORY, events),
+        ):
+            store.clear()
+            store.update(restored)
+
+
+def _history_entry(vehicle: Vehicle, timestamp: datetime | None = None) -> VehicleHistoryEntry:
+    return VehicleHistoryEntry(
+        timestamp=timestamp or datetime.now(UTC),
+        current_soc=vehicle.current_soc,
+        current_soh=vehicle.current_soh,
+        status=vehicle.status,
     )
 
 
@@ -139,8 +177,10 @@ def create_vehicle(payload: VehicleCreate) -> Vehicle:
         if payload.id in MOCK_FLEET:
             raise ValueError(f"Vehicle '{payload.id}' already exists")
         vehicle = Vehicle(**payload.model_dump())
+        entry = _history_entry(vehicle)
+        persistence.save_vehicle(vehicle, entry)
         MOCK_FLEET[vehicle.id] = vehicle
-        _record_history(vehicle)
+        VEHICLE_HISTORY.setdefault(vehicle.id, []).append(entry)
         return vehicle.model_copy(deep=True)
 
 
@@ -155,14 +195,23 @@ def update_vehicle(vehicle_id: str, payload: VehicleUpdate) -> Vehicle:
             updates.update(state_source="manual", state_timestamp=timestamp)
         # Validate the complete result: model_copy(update=...) would bypass validation.
         updated = Vehicle.model_validate({**vehicle.model_dump(), **updates})
+        entry = (
+            _history_entry(updated)
+            if {"current_soc", "current_soh", "status"} & updates.keys()
+            else None
+        )
+        persistence.save_vehicle(updated, entry)
         MOCK_FLEET[vehicle_id] = updated
-        if {"current_soc", "current_soh", "status"} & updates.keys():
-            _record_history(updated)
+        if entry is not None:
+            VEHICLE_HISTORY.setdefault(vehicle_id, []).append(entry)
         return updated.model_copy(deep=True)
 
 
 def delete_vehicle(vehicle_id: str) -> None:
     with LOCK:
+        if vehicle_id not in MOCK_FLEET:
+            raise KeyError(vehicle_id)
+        persistence.delete_vehicle(vehicle_id)
         del MOCK_FLEET[vehicle_id]
         VEHICLE_HISTORY.pop(vehicle_id, None)
         LATEST_TELEMETRY.pop(vehicle_id, None)
@@ -181,9 +230,8 @@ def store_event(event: TelemetryEvent) -> None:
         vehicle = MOCK_FLEET[event.vehicle_id]
         event = event.model_copy(deep=True)
         latest = LATEST_TELEMETRY.get(event.vehicle_id)
-        if latest is None or event.timestamp >= latest.timestamp:
-            LATEST_TELEMETRY[event.vehicle_id] = event
-        TELEMETRY_HISTORY.setdefault(event.vehicle_id, []).append(event)
+        updated = vehicle
+        entry = None
         if vehicle.state_timestamp is None or event.timestamp >= vehicle.state_timestamp:
             updated = vehicle.model_copy(
                 update={
@@ -193,8 +241,14 @@ def store_event(event: TelemetryEvent) -> None:
                     "state_timestamp": event.timestamp,
                 }
             )
-            MOCK_FLEET[event.vehicle_id] = updated
-            _record_history(updated, event.timestamp)
+            entry = _history_entry(updated, event.timestamp)
+        persistence.save_vehicle(updated, entry, event)
+        if latest is None or event.timestamp >= latest.timestamp:
+            LATEST_TELEMETRY[event.vehicle_id] = event
+        TELEMETRY_HISTORY.setdefault(event.vehicle_id, []).append(event)
+        MOCK_FLEET[event.vehicle_id] = updated
+        if entry is not None:
+            VEHICLE_HISTORY.setdefault(event.vehicle_id, []).append(entry)
 
 
 def get_latest_telemetry(vehicle_id: str) -> TelemetryEvent | None:

@@ -1,12 +1,42 @@
-from fastapi import FastAPI
+import logging
+import sqlite3
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import simulation, telemetry, vehicles
+from app.core import fleet_state, persistence
+from app.core.config import settings
+from app.schemas.simulation import SimulationRecord
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    with persistence.open_database(settings.DATABASE_PATH, fleet_state.DEMO_FLEET) as db:
+        records = [
+            SimulationRecord.model_validate_json(payload)
+            for (payload,) in db.execute("SELECT payload FROM simulations ORDER BY rowid")
+        ]
+        with fleet_state.LOCK:
+            fleet_state.restore()
+            simulation.SIMULATION_HISTORY[:] = records
+        yield
+
 
 app = FastAPI(
     title="EV Fleet Telematics & RRD Simulation API",
     version="1.0.0",
+    lifespan=lifespan,
 )
+
+
+@app.exception_handler(sqlite3.Error)
+async def storage_error(request: Request, exc: sqlite3.Error):
+    logging.getLogger(__name__).error("Fleet storage failed", exc_info=exc)
+    return JSONResponse(status_code=503, content={"detail": "Fleet storage unavailable"})
+
 
 # CORS setup for Web & Mobile dev environments
 app.add_middleware(
