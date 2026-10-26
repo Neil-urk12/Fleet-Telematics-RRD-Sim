@@ -38,6 +38,13 @@ export interface Vehicle extends BatteryStateMetadata {
   /** Optional for offline demo profiles; backend defaults to 2500 kg and 0.60. */
   curb_mass_kg?: number;
   regen_efficiency?: number;
+  /** Reported operating history; null when the vehicle has no reported history. */
+  cycle_count?: number | null;
+  avg_dod_pct?: number | null;
+  fast_charge_share_pct?: number | null;
+  thermal_stress_index?: number | null;
+  /** Derived history stress assessment; absent for offline demo profiles. */
+  battery_history?: BatteryHistory;
   current_soc: number;
   current_soh: number;
   status: VehicleStatus;
@@ -51,6 +58,10 @@ export interface VehicleCreate {
   baseline_efficiency_wh_km: number;
   curb_mass_kg?: number;
   regen_efficiency?: number;
+  cycle_count?: number | null;
+  avg_dod_pct?: number | null;
+  fast_charge_share_pct?: number | null;
+  thermal_stress_index?: number | null;
   current_soc: number;
   current_soh: number;
   status?: VehicleStatus;
@@ -63,9 +74,13 @@ export interface VehicleUpdate {
   baseline_efficiency_wh_km?: number;
   curb_mass_kg?: number;
   regen_efficiency?: number;
+  cycle_count?: number | null;
+  avg_dod_pct?: number | null;
+  fast_charge_share_pct?: number | null;
+  thermal_stress_index?: number | null;
   current_soc?: number;
   current_soh?: number;
-  status?: VehicleStatus;
+  status?: string;
 }
 
 export interface VehicleHistoryEntry {
@@ -154,13 +169,28 @@ export type SimulationVehicleProfile = Required<Pick<Vehicle,
   | "baseline_efficiency_wh_km"
   | "curb_mass_kg"
   | "regen_efficiency"
+  | "cycle_count"
+  | "avg_dod_pct"
+  | "fast_charge_share_pct"
+  | "thermal_stress_index"
 >>;
+
+/** Derived operational-history stress assessment. */
+export interface BatteryHistory {
+  /** 0-100 history stress score; null when the vehicle reports no operating history. */
+  stress_score: number | null;
+  stress_class: "NORMAL" | "ELEVATED" | "HIGH" | null;
+  /** Multiplier applied to the SOH-adjusted usable capacity. */
+  capacity_factor: number;
+}
 
 export interface SimulationResponse extends BatteryStateMetadata {
   vehicle_id: string;
   vehicle_profile: SimulationVehicleProfile;
   starting_soc_pct: number;
   starting_soh_pct: number;
+  /** Backend history overlay; offline demo estimates may omit it. */
+  battery_history?: BatteryHistory;
   usable_battery_capacity_kwh: number;
   estimated_energy_consumption_kwh: number;
   /** Backend energy breakdown; offline demo estimates may omit it. */

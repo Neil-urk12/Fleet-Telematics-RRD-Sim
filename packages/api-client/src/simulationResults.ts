@@ -1,4 +1,4 @@
-import type { SimulationRequest, SimulationResponse, SimulationVehicleProfile, Vehicle } from "./types";
+import type { BatteryHistory, SimulationRequest, SimulationResponse, SimulationVehicleProfile, Vehicle } from "./types";
 
 /** Client-side snapshot of the inputs and result of one completed assessment. */
 export interface SimulationAssessment {
@@ -14,6 +14,10 @@ export function getSimulationVehicleProfile(vehicle: Vehicle): SimulationVehicle
     baseline_efficiency_wh_km: vehicle.baseline_efficiency_wh_km,
     curb_mass_kg: vehicle.curb_mass_kg ?? 2500,
     regen_efficiency: vehicle.regen_efficiency ?? 0.60,
+    cycle_count: vehicle.cycle_count ?? null,
+    avg_dod_pct: vehicle.avg_dod_pct ?? null,
+    fast_charge_share_pct: vehicle.fast_charge_share_pct ?? null,
+    thermal_stress_index: vehicle.thermal_stress_index ?? null,
   };
 }
 
@@ -28,10 +32,12 @@ export function isAssessmentOutdated(
   const result = assessment.response;
   const profile = result.vehicle_profile;
   const currentProfile = getSimulationVehicleProfile(vehicle);
-  // Older backend responses cannot establish whether specifications still match.
+  // Older backend responses without a profile are treated as outdated because a
+  // match cannot be verified. A field the stored profile predates reads as
+  // unreported, so it only mismatches when the vehicle now reports that field.
   const profileChanged = !profile ||
     (Object.keys(currentProfile) as (keyof SimulationVehicleProfile)[])
-      .some(key => profile[key] !== currentProfile[key]);
+      .some(key => (profile[key] ?? null) !== (currentProfile[key] ?? null));
   return inputsChanged || profileChanged || vehicle.id !== result.vehicle_id ||
     vehicle.current_soc !== result.starting_soc_pct ||
     vehicle.current_soh !== result.starting_soh_pct ||
@@ -58,4 +64,12 @@ export function getSimulationEnergyBreakdown(result: SimulationResponse) {
     return null;
   }
   return components as { label: string; value: number; recovered: boolean }[];
+}
+
+/** Describe a reported operating history, or state that none was reported. */
+export function formatBatteryHistory(history: BatteryHistory | undefined | null): string {
+  if (!history || history.stress_score === null || history.stress_class === null) {
+    return "Operating history not reported";
+  }
+  return `History stress ${history.stress_class} (${history.stress_score.toFixed(0)}/100)`;
 }
