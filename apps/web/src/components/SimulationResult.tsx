@@ -1,4 +1,4 @@
-import { formatBatteryState, formatSimulationConditions, getSimulationEnergyBreakdown } from '@fleet/api-client';
+import { formatBatteryHistory, formatBatteryState, formatSimulationConditions, getSimulationEnergyBreakdown } from '@fleet/api-client';
 import type { ReactNode } from 'react';
 import type { SimulationAssessment } from '@fleet/api-client';
 
@@ -34,6 +34,7 @@ export function SimulationResult({ assessment, isOutdated, children }: Simulatio
                         {formatBatteryState(result)} · Starting SOC {result.starting_soc_pct.toFixed(1)}%
                         {' / '}SOH {result.starting_soh_pct.toFixed(1)}%
                     </p>
+                    <p>{formatBatteryHistory(result.battery_history)}</p>
                     <dl className="assessment-stats">
                         <div><dt>Arrival SOC</dt><dd>{result.projected_arrival_soc_pct.toFixed(1)}%</dd></div>
                         <div><dt>Remaining range</dt><dd>{result.remaining_range_km.toFixed(1)} km</dd></div>

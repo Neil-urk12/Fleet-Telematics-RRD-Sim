@@ -2,13 +2,14 @@ import { getSimulationVehicleProfile } from '@fleet/api-client';
 import type { Vehicle, TelemetryEvent, SimulationResponse } from '@fleet/api-client';
 
 // ── Mock Vehicles ────────────────────────────────────────────────
+// History values mirror the backend demo fleet and are illustrative, not measured.
 export const MOCK_VEHICLES: Vehicle[] = [
-    { id: 'EV-001', name: 'Alpha', model: 'Tesla Model 3', battery_capacity_kwh: 75, baseline_efficiency_wh_km: 160, current_soc: 82.4, current_soh: 96.1, state_source: 'vehicle_defaults', state_timestamp: null, status: 'IN_USE' },
-    { id: 'EV-002', name: 'Bravo', model: 'Rivian R1T',    battery_capacity_kwh: 135, baseline_efficiency_wh_km: 210, current_soc: 61.8, current_soh: 91.3, state_source: 'vehicle_defaults', state_timestamp: null, status: 'IN_USE' },
-    { id: 'EV-003', name: 'Charlie', model: 'Ford F-150L',  battery_capacity_kwh: 98,  baseline_efficiency_wh_km: 240, current_soc: 38.5, current_soh: 88.7, state_source: 'vehicle_defaults', state_timestamp: null, status: 'IN_USE' },
-    { id: 'EV-004', name: 'Delta', model: 'Tesla Model Y',  battery_capacity_kwh: 82,  baseline_efficiency_wh_km: 155, current_soc: 91.2, current_soh: 97.4, state_source: 'vehicle_defaults', state_timestamp: null, status: 'CHARGING' },
-    { id: 'EV-005', name: 'Echo',  model: 'Chevy Silverado EV', battery_capacity_kwh: 200, baseline_efficiency_wh_km: 280, current_soc: 25.3, current_soh: 84.2, state_source: 'vehicle_defaults', state_timestamp: null, status: 'MAINTENANCE' },
-    { id: 'EV-006', name: 'Foxtrot', model: 'Rivian R1S',  battery_capacity_kwh: 135, baseline_efficiency_wh_km: 220, current_soc: 74.6, current_soh: 93.8, state_source: 'vehicle_defaults', state_timestamp: null, status: 'AVAILABLE' },
+    { id: 'EV-001', name: 'Alpha', model: 'Tesla Model 3', battery_capacity_kwh: 75, baseline_efficiency_wh_km: 160, cycle_count: 420, avg_dod_pct: 62, fast_charge_share_pct: 12, thermal_stress_index: 22, current_soc: 82.4, current_soh: 96.1, state_source: 'vehicle_defaults', state_timestamp: null, status: 'IN_USE' },
+    { id: 'EV-002', name: 'Bravo', model: 'Rivian R1T',    battery_capacity_kwh: 135, baseline_efficiency_wh_km: 210, cycle_count: 700, avg_dod_pct: 68, fast_charge_share_pct: 18, thermal_stress_index: 32, current_soc: 61.8, current_soh: 91.3, state_source: 'vehicle_defaults', state_timestamp: null, status: 'IN_USE' },
+    { id: 'EV-003', name: 'Charlie', model: 'Ford F-150L',  battery_capacity_kwh: 98,  baseline_efficiency_wh_km: 240, cycle_count: 1150, avg_dod_pct: 78, fast_charge_share_pct: 30, thermal_stress_index: 50, current_soc: 38.5, current_soh: 88.7, state_source: 'vehicle_defaults', state_timestamp: null, status: 'IN_USE' },
+    { id: 'EV-004', name: 'Delta', model: 'Tesla Model Y',  battery_capacity_kwh: 82,  baseline_efficiency_wh_km: 155, cycle_count: 310, avg_dod_pct: 55, fast_charge_share_pct: 8, thermal_stress_index: 18, current_soc: 91.2, current_soh: 97.4, state_source: 'vehicle_defaults', state_timestamp: null, status: 'CHARGING' },
+    { id: 'EV-005', name: 'Echo',  model: 'Chevy Silverado EV', battery_capacity_kwh: 200, baseline_efficiency_wh_km: 280, cycle_count: 1610, avg_dod_pct: 88, fast_charge_share_pct: 58, thermal_stress_index: 71, current_soc: 25.3, current_soh: 84.2, state_source: 'vehicle_defaults', state_timestamp: null, status: 'MAINTENANCE' },
+    { id: 'EV-006', name: 'Foxtrot', model: 'Rivian R1S',  battery_capacity_kwh: 135, baseline_efficiency_wh_km: 220, cycle_count: 760, avg_dod_pct: 68, fast_charge_share_pct: 21, thermal_stress_index: 36, current_soc: 74.6, current_soh: 93.8, state_source: 'vehicle_defaults', state_timestamp: null, status: 'AVAILABLE' },
 ];
 
 // ── Mock Telemetry ───────────────────────────────────────────────
@@ -29,6 +30,7 @@ export const MOCK_SIMULATION: SimulationResponse = {
     starting_soh_pct: 96.1,
     state_source: 'vehicle_defaults',
     state_timestamp: null,
+    battery_history: { stress_score: 24.8, stress_class: 'NORMAL', capacity_factor: 0.99 },
     usable_battery_capacity_kwh: 72.1,
     estimated_energy_consumption_kwh: 24.8,
     projected_arrival_soc_pct: 48.6,
