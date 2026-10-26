@@ -9,10 +9,22 @@ import {
   View,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { formatBatteryHistory } from "@fleet/api-client";
 import type { Vehicle } from "@fleet/api-client";
 import { colors } from "../constants/theme";
 import { Header, VehicleList, VehicleDetails, ErrorBanner } from "../components";
 import type { TabType } from "../navigation";
+
+function historyStressColor(vehicle: Vehicle): string {
+  switch (vehicle.battery_history?.stress_class) {
+    case "HIGH":
+      return colors.riskDangerText;
+    case "ELEVATED":
+      return colors.riskCautionText;
+    default:
+      return colors.textPrimary;
+  }
+}
 
 interface FleetScreenProps {
   vehicles: Vehicle[];
@@ -177,6 +189,53 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
                   {selectedVehicle.status || "ACTIVE"}
                 </Text>
               </View>
+            </View>
+
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Reported Operating History</Text>
+              <Text style={styles.specVal}>
+                {selectedVehicle.cycle_count === null ||
+                selectedVehicle.cycle_count === undefined
+                  ? "Not reported"
+                  : `${selectedVehicle.cycle_count} cycles`}
+              </Text>
+            </View>
+
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Average Depth of Discharge</Text>
+              <Text style={styles.specVal}>
+                {selectedVehicle.avg_dod_pct === null ||
+                selectedVehicle.avg_dod_pct === undefined
+                  ? "Not reported"
+                  : `${selectedVehicle.avg_dod_pct}%`}
+              </Text>
+            </View>
+
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Fast-Charge Share</Text>
+              <Text style={styles.specVal}>
+                {selectedVehicle.fast_charge_share_pct === null ||
+                selectedVehicle.fast_charge_share_pct === undefined
+                  ? "Not reported"
+                  : `${selectedVehicle.fast_charge_share_pct}%`}
+              </Text>
+            </View>
+
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Thermal Stress Index</Text>
+              <Text style={styles.specVal}>
+                {selectedVehicle.thermal_stress_index === null ||
+                selectedVehicle.thermal_stress_index === undefined
+                  ? "Not reported"
+                  : `${selectedVehicle.thermal_stress_index}/100`}
+              </Text>
+            </View>
+
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>History Stress</Text>
+              <Text style={[styles.specVal, { color: historyStressColor(selectedVehicle) }]}>
+                {formatBatteryHistory(selectedVehicle.battery_history)}
+              </Text>
             </View>
           </View>
         </View>

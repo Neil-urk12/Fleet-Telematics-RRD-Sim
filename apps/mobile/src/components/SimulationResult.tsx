@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { formatBatteryState, formatSimulationConditions, getSimulationEnergyBreakdown } from "@fleet/api-client";
+import { formatBatteryHistory, formatBatteryState, formatSimulationConditions, getSimulationEnergyBreakdown } from "@fleet/api-client";
 import type { SimulationAssessment } from "@fleet/api-client";
 import { colors } from "../constants/theme";
 
@@ -51,6 +51,9 @@ export const SimulationResult: React.FC<SimulationResultProps> = ({ assessment, 
       <Text style={styles.detailRow}>
         Starting SOC: {result.starting_soc_pct.toFixed(1)}% · SOH: {result.starting_soh_pct.toFixed(1)}%
       </Text>
+      <Text style={styles.detailRow}>
+        {origin === "local" ? "History stress not modelled in the offline estimate." : formatBatteryHistory(result.battery_history)}
+      </Text>
       <View style={[styles.riskBadge, getBadgeStyle()]}>
         <Text style={[styles.riskText, getTextStyle()]}>{result.risk_level.replaceAll("_", " ")}</Text>
       </View>
@@ -83,7 +86,8 @@ export const SimulationResult: React.FC<SimulationResultProps> = ({ assessment, 
       ) : (
         <Text style={styles.note}>
           Confidence unavailable for offline estimates. This estimate excludes temperature,
-          SOH scaling, road type, descent, and regen. Connect to the backend to assess those inputs.
+          SOH scaling, road type, descent, regen, and battery history stress.
+          Connect to the backend to assess those inputs.
         </Text>
       )}
       <Text accessibilityRole="header" style={styles.sectionTitle}>Recommendations</Text>
