@@ -1,3 +1,4 @@
+from app.core.battery_history import assess_battery_history
 from app.schemas.simulation import SimulationRequest, SimulationResponse, SimulationVehicleProfile
 from app.schemas.vehicle import Vehicle
 
@@ -12,6 +13,10 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
     # 1. Battery Degradation & Available Energy Calculation
     soh_factor = vehicle.current_soh / 100.0
     usable_capacity_kwh = vehicle.battery_capacity_kwh * soh_factor
+
+    # Operational-history stress overlay, applied after SOH and before temperature.
+    history = assess_battery_history(vehicle)
+    usable_capacity_kwh *= history.capacity_factor
 
     # Temperature derating factor for battery capacity
     if req.ambient_temp_c < 0:
@@ -120,11 +125,16 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
             baseline_efficiency_wh_km=vehicle.baseline_efficiency_wh_km,
             curb_mass_kg=vehicle.curb_mass_kg,
             regen_efficiency=vehicle.regen_efficiency,
+            cycle_count=vehicle.cycle_count,
+            avg_dod_pct=vehicle.avg_dod_pct,
+            fast_charge_share_pct=vehicle.fast_charge_share_pct,
+            thermal_stress_index=vehicle.thermal_stress_index,
         ),
         starting_soc_pct=vehicle.current_soc,
         starting_soh_pct=vehicle.current_soh,
         state_source=vehicle.state_source,
         state_timestamp=vehicle.state_timestamp,
+        battery_history=history,
         usable_battery_capacity_kwh=round(effective_usable_kwh, 2),
         estimated_energy_consumption_kwh=total_consumption_kwh,
         propulsion_energy_kwh=round(propulsion_energy_kwh, 2),

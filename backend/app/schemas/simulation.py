@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from app.schemas.vehicle import BatteryStateSource
+from app.schemas.vehicle import BatteryHistory, BatteryStateSource
 
 RoadType = Literal["URBAN", "HIGHWAY", "MIXED"]
 
@@ -36,6 +36,10 @@ class SimulationVehicleProfile(BaseModel):
     baseline_efficiency_wh_km: float
     curb_mass_kg: float
     regen_efficiency: float
+    cycle_count: int | None = None
+    avg_dod_pct: float | None = None
+    fast_charge_share_pct: float | None = None
+    thermal_stress_index: float | None = None
 
 
 class SimulationResponse(BaseModel):
@@ -45,6 +49,7 @@ class SimulationResponse(BaseModel):
     starting_soh_pct: float
     state_source: BatteryStateSource
     state_timestamp: datetime | None
+    battery_history: BatteryHistory
     usable_battery_capacity_kwh: float
     estimated_energy_consumption_kwh: float
     propulsion_energy_kwh: float

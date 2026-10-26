@@ -33,6 +33,10 @@ class SimulationProfileTests(unittest.TestCase):
             "baseline_efficiency_wh_km": 260,
             "curb_mass_kg": 2500,
             "regen_efficiency": 0.6,
+            "cycle_count": None,
+            "avg_dod_pct": None,
+            "fast_charge_share_pct": None,
+            "thermal_stress_index": None,
         }
         self.request = SimulationRequest(
             vehicle_id=self.vehicle.id,
@@ -78,6 +82,10 @@ class SimulationProfileTests(unittest.TestCase):
             ("baseline_efficiency_wh_km", 500),
             ("curb_mass_kg", 4000),
             ("regen_efficiency", 0.1),
+            ("cycle_count", 1200),
+            ("avg_dod_pct", 85.0),
+            ("fast_charge_share_pct", 40.0),
+            ("thermal_stress_index", 60.0),
         ):
             with self.subTest(field=field):
                 updated = vehicles.update_vehicle(self.vehicle.id, VehicleUpdate(**{field: value}))

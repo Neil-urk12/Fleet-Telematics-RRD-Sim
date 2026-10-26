@@ -22,14 +22,61 @@ class VehicleBase(BaseModel):
         allow_inf_nan=False,
         description="Fraction of descent potential energy recoverable at HIGH regen",
     )
+    cycle_count: int | None = Field(
+        default=None,
+        ge=0,
+        allow_inf_nan=False,
+        description="Reported equivalent full charge cycles; null when the history is unknown",
+    )
+    avg_dod_pct: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        allow_inf_nan=False,
+        description="Reported average depth of discharge (%); null when unknown",
+    )
+    fast_charge_share_pct: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        allow_inf_nan=False,
+        description="Reported share of charging energy from DC fast charging (%); unknown if null",
+    )
+    thermal_stress_index: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        allow_inf_nan=False,
+        description="Reported thermal stress index (0-100); null when unknown",
+    )
     current_soc: float = Field(..., ge=0.0, le=100.0, description="Current State of Charge (%)")
     current_soh: float = Field(..., ge=0.0, le=100.0, description="Current State of Health (%)")
     status: str = Field(default="AVAILABLE", description="Vehicle operational status")
 
 
+class BatteryHistory(BaseModel):
+    """Derived operational-history stress assessment."""
+
+    stress_score: float | None = Field(
+        default=None, description="History stress score (0-100); null when no history is reported"
+    )
+    stress_class: Literal["NORMAL", "ELEVATED", "HIGH"] | None = Field(
+        default=None, description="History stress classification; null when no history is reported"
+    )
+    capacity_factor: float = Field(
+        default=1.0, description="Multiplier applied to the SOH-adjusted usable capacity"
+    )
+
+
 class Vehicle(VehicleBase):
     state_source: BatteryStateSource = "vehicle_defaults"
     state_timestamp: datetime | None = None
+
+
+class VehicleWithHistory(Vehicle):
+    """Vehicle response including its derived operational-history assessment."""
+
+    battery_history: BatteryHistory
 
 
 class VehicleCreate(VehicleBase):
@@ -47,6 +94,10 @@ class VehicleUpdate(BaseModel):
     baseline_efficiency_wh_km: float | None = None
     curb_mass_kg: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     regen_efficiency: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    cycle_count: int | None = Field(default=None, ge=0, allow_inf_nan=False)
+    avg_dod_pct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    fast_charge_share_pct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    thermal_stress_index: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
     current_soc: float | None = Field(default=None, ge=0.0, le=100.0)
     current_soh: float | None = Field(default=None, ge=0.0, le=100.0)
     status: str | None = None

@@ -2,7 +2,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
 
 from app.core import fleet_state
-from app.schemas.vehicle import Vehicle, VehicleCreate, VehicleHistoryEntry, VehicleUpdate
+from app.core.battery_history import assess_battery_history
+from app.schemas.vehicle import (
+    Vehicle,
+    VehicleCreate,
+    VehicleHistoryEntry,
+    VehicleUpdate,
+    VehicleWithHistory,
+)
 
 router = APIRouter()
 
@@ -11,31 +18,37 @@ def _not_found(vehicle_id: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"Vehicle '{vehicle_id}' not found")
 
 
-@router.get("/", response_model=list[Vehicle])
-def list_vehicles() -> list[Vehicle]:
-    return fleet_state.list_vehicles()
+def _with_history(vehicle: Vehicle) -> VehicleWithHistory:
+    return VehicleWithHistory(
+        **vehicle.model_dump(), battery_history=assess_battery_history(vehicle)
+    )
 
 
-@router.get("/{vehicle_id}", response_model=Vehicle)
-def get_vehicle(vehicle_id: str) -> Vehicle:
+@router.get("/", response_model=list[VehicleWithHistory])
+def list_vehicles() -> list[VehicleWithHistory]:
+    return [_with_history(vehicle) for vehicle in fleet_state.list_vehicles()]
+
+
+@router.get("/{vehicle_id}", response_model=VehicleWithHistory)
+def get_vehicle(vehicle_id: str) -> VehicleWithHistory:
     try:
-        return fleet_state.get_vehicle(vehicle_id)
+        return _with_history(fleet_state.get_vehicle(vehicle_id))
     except KeyError as exc:
         raise _not_found(vehicle_id) from exc
 
 
-@router.post("/", response_model=Vehicle, status_code=201)
-def create_vehicle(payload: VehicleCreate) -> Vehicle:
+@router.post("/", response_model=VehicleWithHistory, status_code=201)
+def create_vehicle(payload: VehicleCreate) -> VehicleWithHistory:
     try:
-        return fleet_state.create_vehicle(payload)
+        return _with_history(fleet_state.create_vehicle(payload))
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.patch("/{vehicle_id}", response_model=Vehicle)
-def update_vehicle(vehicle_id: str, payload: VehicleUpdate) -> Vehicle:
+@router.patch("/{vehicle_id}", response_model=VehicleWithHistory)
+def update_vehicle(vehicle_id: str, payload: VehicleUpdate) -> VehicleWithHistory:
     try:
-        return fleet_state.update_vehicle(vehicle_id, payload)
+        return _with_history(fleet_state.update_vehicle(vehicle_id, payload))
     except KeyError as exc:
         raise _not_found(vehicle_id) from exc
     except ValidationError as exc:
