@@ -10,6 +10,7 @@
     "lint": "pnpm --filter @fleet/web lint",
     "clean": "pnpm -r exec rm -rf node_modules dist .expo",
     "test:load": "k6 run k6/load-test.js",
-    "test:smoke": "k6 run k6/smoke-test.js"
+    "test:smoke": "k6 run k6/smoke-test.js",
+    "test:client": "node packages/api-client/check-reading-age.mjs && node packages/api-client/check-fleet-comparison.mjs && node packages/api-client/check-battery-history.mjs"
   }
 }
