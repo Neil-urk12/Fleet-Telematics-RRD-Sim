@@ -1,8 +1,11 @@
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
+from math import isfinite
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -30,6 +33,14 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(request: Request, exc: RequestValidationError):
+    detail = jsonable_encoder(
+        exc.errors(), custom_encoder={float: lambda value: value if isfinite(value) else str(value)}
+    )
+    return JSONResponse(status_code=422, content={"detail": detail})
 
 
 @app.exception_handler(sqlite3.Error)

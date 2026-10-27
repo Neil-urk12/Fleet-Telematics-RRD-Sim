@@ -1,12 +1,14 @@
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 BatteryStateSource = Literal["telemetry", "vehicle_defaults", "manual"]
 
 
 class VehicleBase(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     id: str = Field(..., description="Unique vehicle identifier")
     name: str = Field(..., description="Display name / Fleet ID")
     model: str = Field(..., description="Vehicle make and model")
@@ -87,6 +89,8 @@ class VehicleCreate(VehicleBase):
 
 class VehicleUpdate(BaseModel):
     """Payload for partial updates — every field optional."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     name: str | None = None
     model: str | None = None

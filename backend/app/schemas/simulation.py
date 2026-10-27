@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.vehicle import BatteryHistory, BatteryStateSource
 
@@ -10,6 +10,8 @@ RoadType = Literal["URBAN", "HIGHWAY", "MIXED"]
 
 
 class SimulationRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_id: str = Field(..., description="Selected vehicle ID")
     route_distance_km: float = Field(..., gt=0, description="Total route distance in km")
     elevation_gain_m: float = Field(
@@ -75,6 +77,8 @@ class SimulationRecord(BaseModel):
 class BatchSimulationRequest(BaseModel):
     """Run the same route/conditions against multiple vehicles (or the whole fleet)."""
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_ids: list[str] | None = Field(
         default=None, description="Vehicles to evaluate; omit to run against the entire fleet"
     )
@@ -110,6 +114,8 @@ class SimulationConfig(BaseModel):
 
 
 class CompareSimulationRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_id: str = Field(..., description="Selected vehicle ID")
     route_distance_km: float = Field(..., gt=0)
     elevation_gain_m: float = Field(default=0.0, ge=0)

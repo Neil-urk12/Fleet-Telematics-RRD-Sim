@@ -1,11 +1,13 @@
 from datetime import UTC, datetime, timedelta
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MAX_FUTURE_CLOCK_SKEW = timedelta(minutes=5)
 
 
 class TelemetryEvent(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_id: str = Field(..., description="Target vehicle ID")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     soc: float = Field(..., ge=0.0, le=100.0, description="State of Charge (%)")

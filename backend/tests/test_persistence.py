@@ -1,5 +1,6 @@
 """Restart and failed-write checks using isolated SQLite files."""
 
+import json
 import sqlite3
 import unittest
 from copy import deepcopy
@@ -67,6 +68,128 @@ class PersistenceTests(unittest.TestCase):
             "ambient_temp_c": 25,
             "pack_temp_c": 25,
         }
+
+    def test_nonfinite_inputs_are_rejected_without_changes_and_restart_succeeds(self):
+        route_fields = (
+            "ambient_temp_c",
+            "route_distance_km",
+            "elevation_gain_m",
+            "elevation_loss_m",
+            "payload_kg",
+            "reserve_soc_target_pct",
+        )
+        vehicle_fields = (
+            "battery_capacity_kwh",
+            "baseline_efficiency_wh_km",
+            "curb_mass_kg",
+            "regen_efficiency",
+            "current_soc",
+            "current_soh",
+            "cycle_count",
+            "avg_dod_pct",
+            "fast_charge_share_pct",
+            "thermal_stress_index",
+        )
+        telemetry_fields = (
+            "soc",
+            "soh",
+            "speed_kph",
+            "odometer_km",
+            "ambient_temp_c",
+            "pack_temp_c",
+            "latitude",
+            "longitude",
+        )
+        requests = (
+            ("POST", "/api/simulation/run", self.route, route_fields),
+            (
+                "POST",
+                "/api/simulation/batch",
+                {
+                    "vehicle_ids": ["PERSIST-1"],
+                    "route_distance_km": 50,
+                },
+                route_fields,
+            ),
+            (
+                "POST",
+                "/api/simulation/compare",
+                {
+                    **self.route,
+                    "configs": [{"label": "Normal"}, {"label": "Eco"}],
+                },
+                route_fields,
+            ),
+            ("POST", "/api/vehicles/", {**self.vehicle, "id": "INVALID"}, vehicle_fields),
+            ("PATCH", "/api/vehicles/PERSIST-1", {}, vehicle_fields),
+            ("POST", "/api/telemetry/ingest", self.event(), telemetry_fields),
+            ("POST", "/api/telemetry/batch", self.event(), telemetry_fields),
+        )
+        paths = (
+            "/api/vehicles/",
+            "/api/vehicles/PERSIST-1/history",
+            "/api/telemetry/PERSIST-1/latest",
+            "/api/telemetry/PERSIST-1/history",
+            "/api/simulation/history",
+        )
+        with TestClient(app, raise_server_exceptions=False) as client:
+            self.assertEqual(client.post("/api/vehicles/", json=self.vehicle).status_code, 201)
+            self.assertEqual(client.post("/api/simulation/run", json=self.route).status_code, 200)
+            expected = {path: client.get(path).json() for path in paths}
+            persisted = list(persistence.connection.iterdump())
+            for method, path, base, fields in requests:
+                for field in fields:
+                    for value in ("NaN", "Infinity", "-Infinity", "1e309", "-1e309"):
+                        payload = {**base, field: value}
+                        if path == "/api/telemetry/batch":
+                            payload = {"events": [self.event(), payload]}
+                        for raw in (False, True):
+                            content = json.dumps(payload)
+                            if raw:
+                                content = content.replace(json.dumps(value), value)
+                            response = client.request(
+                                method,
+                                path,
+                                content=content,
+                                headers={"Content-Type": "application/json"},
+                            )
+                            self.assertEqual(
+                                response.status_code, 422, (method, path, field, value, raw)
+                            )
+                            self.assertIn(field, response.json()["detail"][0]["loc"])
+            self.assertEqual(list(persistence.connection.iterdump()), persisted)
+            for path, value in expected.items():
+                self.assertEqual(client.get(path).json(), value)
+        self.forget_cache()
+        with TestClient(app) as client:
+            for path, value in expected.items():
+                self.assertEqual(client.get(path).json(), value)
+
+    def test_finite_temperatures_and_nullable_fields_survive_restart(self):
+        with TestClient(app) as client:
+            self.assertEqual(client.post("/api/vehicles/", json=self.vehicle).status_code, 201)
+            self.assertEqual(
+                client.patch("/api/vehicles/PERSIST-1", json={"avg_dod_pct": None}).status_code,
+                200,
+            )
+            event = {**self.event(), "ambient_temp_c": -10, "pack_temp_c": 0, "latitude": None}
+            self.assertEqual(client.post("/api/telemetry/ingest", json=event).status_code, 200)
+            self.assertEqual(
+                client.post(
+                    "/api/simulation/run", json={**self.route, "ambient_temp_c": -10}
+                ).status_code,
+                200,
+            )
+        self.forget_cache()
+        with TestClient(app) as client:
+            self.assertIsNone(client.get("/api/vehicles/PERSIST-1").json()["avg_dod_pct"])
+            telemetry = client.get("/api/telemetry/PERSIST-1/latest").json()["data"]
+            self.assertEqual(telemetry["ambient_temp_c"], -10)
+            self.assertEqual(telemetry["pack_temp_c"], 0)
+            self.assertIsNone(telemetry["latitude"])
+            self.assertEqual(
+                client.get("/api/simulation/history").json()[0]["request"]["ambient_temp_c"], -10
+            )
 
     def test_restart_preserves_state_ordering_histories_and_all_simulation_modes(self):
         with TestClient(app) as client:
