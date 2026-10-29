@@ -100,23 +100,23 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
     if projected_arrival_soc >= req.reserve_soc_target_pct:
         risk_level = "SAFE"
         confidence_score = 92.0
-        recommendations.append("Route is safe to proceed under current operational parameters.")
+        recommendations.append("No changes needed. You can drive this trip as planned.")
     elif projected_arrival_soc >= (req.reserve_soc_target_pct / 2.0):
         risk_level = "CAUTION"
         confidence_score = 75.0
-        recommendations.append("Arrival SOC will fall below target reserve margin.")
+        recommendations.append("You would arrive with less battery than your chosen safety margin.")
         if req.driving_style == "AGGRESSIVE":
-            recommendations.append("Switch driving profile to ECO to conserve battery.")
+            recommendations.append("Drive in Eco mode to save battery.")
         if req.hvac_mode == "HIGH":
-            recommendations.append("Reduce HVAC demand to MEDIUM or LOW.")
-        recommendations.append("Consider a 10-15 minute top-up charge before departure.")
+            recommendations.append("Turn heating/A/C down to Medium or Low.")
+        recommendations.append("Consider a 10-15 minute top-up charge before you leave.")
     else:
         risk_level = "NOT_RECOMMENDED"
         confidence_score = 88.0
         recommendations.append(
-            "Route cannot be safely completed without en-route or pre-departure charging."
+            "This trip needs a charge, either before you leave or at a stop on the way."
         )
-        recommendations.append("Reassign to a vehicle with higher initial SOC or higher SOH.")
+        recommendations.append("Or choose a vehicle with more charge or a healthier battery.")
 
     return SimulationResponse(
         vehicle_id=vehicle.id,
