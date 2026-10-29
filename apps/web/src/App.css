@@ -56,6 +56,36 @@
     height: 220px;
 }
 
+/* Simple view hides the thermal, SOH-history and regen panels. */
+.main-content--simple {
+    grid-template-columns: 200px 1fr 1fr;
+}
+
+.bottom-row--simple {
+    grid-template-columns: 1fr;
+}
+
+.data-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 6px var(--space-lg);
+    background: var(--bg-secondary);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.data-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-yellow);
+}
+
+.data-status--live .data-status-dot {
+    background: var(--accent-green);
+}
+
 /* All panels share a dark background */
 .fleet-panel,
 .map-panel,
@@ -177,44 +207,87 @@
     min-width: 0;
 }
 
-.route-inputs legend {
-    font-size: 12px;
+/* ── Guided trip setup ────────────────────────────────────────────── */
+.setup-header h2 {
+    font-size: 18px;
     font-weight: 700;
     color: var(--text-primary);
 }
 
 .route-inputs-hint {
-    margin: 2px 0 var(--space-sm);
-    font-size: 11px;
+    margin: 2px 0 var(--space-md);
+    font-size: 13px;
     color: var(--text-secondary);
+}
+
+.setup-steps {
+    display: grid;
+    grid-template-columns: minmax(200px, 1fr) minmax(0, 2.4fr) minmax(220px, 1.2fr);
+    gap: var(--space-md);
+}
+
+.setup-step {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-panel);
+    min-width: 0;
+}
+
+.setup-step h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.step-num {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
+    font-size: 12px;
 }
 
 .route-inputs-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: var(--space-sm);
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-md);
 }
 
 .route-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 11px;
-    color: var(--text-secondary);
+    font-size: 13px;
+    color: var(--text-primary);
     min-width: 0;
+}
+
+.route-field-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
 }
 
 .route-field input,
 .route-field select {
     width: 100%;
-    min-height: 34px;
-    padding: 5px 8px;
+    min-height: 40px;
+    padding: 6px 10px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: var(--bg-input);
     color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 12px;
+    font-family: var(--font-sans);
+    font-size: 14px;
     color-scheme: dark;
 }
 
@@ -223,11 +296,94 @@
 }
 
 .route-field-error {
+    font-size: 12px;
     color: var(--accent-red);
+}
+
+.choice-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 0;
+    min-width: 0;
+}
+
+.choice-group legend {
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.choice-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.choice-btn {
+    flex: 1 1 0;
+    min-height: 36px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.choice-btn:hover {
+    color: var(--text-primary);
+}
+
+.choice-btn--active {
+    border-color: var(--accent-cyan);
+    background: rgba(0, 194, 255, 0.15);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.setup-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-top: var(--space-md);
+}
+
+.simulate-btn {
+    min-height: 48px;
+    padding: 0 var(--space-xl);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.15s;
+}
+
+.simulate-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.simulate-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+    .setup-steps {
+        grid-template-columns: 1fr;
+    }
 }
 
 .route-field input:focus-visible,
 .route-field select:focus-visible,
+.choice-btn:focus-visible,
+.simulate-btn:focus-visible,
+.assessment-details summary:focus-visible,
 .controls-bar button:focus-visible {
     outline: 2px solid var(--accent-cyan);
     outline-offset: 2px;
@@ -304,9 +460,30 @@
     flex-shrink: 0;
 }
 
+.preview-title {
+    display: flex;
+    flex-direction: column;
+    margin-right: var(--space-md);
+}
+
+.preview-title h2 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.preview-title span {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.advanced-toggle {
+    margin-left: auto;
+}
+
 .ctrl-label {
-    font-size: 9px;
-    color: var(--text-muted);
+    font-size: 11px;
+    color: var(--text-secondary);
     letter-spacing: 0.8px;
     text-transform: uppercase;
     margin-right: 2px;

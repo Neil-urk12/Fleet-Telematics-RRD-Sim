@@ -126,6 +126,14 @@ function App() {
     const [drivingStyle, setDrivingStyle] = useState<DrivingStyle>('NORMAL');
     const [hvacMode, setHvacMode] = useState<HvacMode>('LOW');
     const [regenLevel, setRegenLevel] = useState<RegenLevel>('MEDIUM');
+    // Per-browser view preference; storage may be blocked, so fall back to the simple view.
+    const [showAdvanced, setShowAdvanced] = useState(() => {
+        try { return localStorage.getItem('fleet.showAdvanced') === '1'; } catch { return false; }
+    });
+    const toggleAdvanced = () => setShowAdvanced(shown => {
+        try { localStorage.setItem('fleet.showAdvanced', shown ? '0' : '1'); } catch { /* keep in-memory only */ }
+        return !shown;
+    });
     const [routeValues, setRouteValues] = useState<SimulationNumericDraft>({
         route_distance_km: String(TOTAL_DISTANCE),
         elevation_gain_m: String(DEMO_ELEVATION.gain),
@@ -294,28 +302,21 @@ function App() {
                 )}
 
                 <RouteInputs
+                    vehicles={vehicles}
+                    selectedVehicleId={selectedVehicleId}
+                    onVehicleChange={setSelectedVehicleId}
                     values={routeValues}
                     roadType={roadType}
                     onValuesChange={setRouteValues}
                     onRoadTypeChange={setRoadType}
-                    onSubmit={handleRunSimulation}
-                />
-                <ControlsBar
-                    isRunning={isRunning}
-                    onToggleRunning={() => setIsRunning(r => !r)}
-                    speed={speed}
-                    onSpeedChange={setSpeed}
-                    onReset={() => setProgressFraction(0)}
                     drivingStyle={drivingStyle}
                     onDrivingStyleChange={setDrivingStyle}
                     hvacMode={hvacMode}
                     onHvacModeChange={setHvacMode}
                     regenLevel={regenLevel}
                     onRegenLevelChange={setRegenLevel}
-                    progressFraction={progressFraction}
-                    onProgressChange={setProgressFraction}
-                    selectedVehicleId={selectedVehicleId}
                     isSimulating={isSimulating}
+                    onSubmit={handleRunSimulation}
                 />
                 {assessment && (
                     <SimulationResult
@@ -338,9 +339,20 @@ function App() {
                         />
                     </SimulationResult>
                 )}
+                <ControlsBar
+                    isRunning={isRunning}
+                    onToggleRunning={() => setIsRunning(r => !r)}
+                    speed={speed}
+                    onSpeedChange={setSpeed}
+                    onReset={() => setProgressFraction(0)}
+                    progressFraction={progressFraction}
+                    onProgressChange={setProgressFraction}
+                    showAdvanced={showAdvanced}
+                    onToggleAdvanced={toggleAdvanced}
+                />
             </div>
 
-            <div className="main-content">
+            <div className={`main-content ${showAdvanced ? '' : 'main-content--simple'}`}>
                 <FleetPanel
                     vehicles={vehicles}
                     selectedId={selectedVehicleId}
@@ -362,27 +374,33 @@ function App() {
                     progressFraction={progressFraction}
                 />
 
-                <ThermalMap
-                    cellTemps={thermalGrid}
-                    maxTemp={maxTemp}
-                    avgTemp={avgTemp}
-                    packHealthPct={activeVehicle.current_soh}
-                    readingLabel={selectedTelemetry
-                        ? `${dataStatus === 'demo' ? 'Demo' : 'Reported'} pack temperature: ${selectedTelemetry.pack_temp_c.toFixed(1)}°C · ${formatReadingAge(selectedTelemetry.timestamp, readingTime)}`
-                        : 'Pack temperature unavailable · Illustrative baseline 31.5°C'}
-                />
+                {showAdvanced && (
+                    <ThermalMap
+                        cellTemps={thermalGrid}
+                        maxTemp={maxTemp}
+                        avgTemp={avgTemp}
+                        packHealthPct={activeVehicle.current_soh}
+                        readingLabel={selectedTelemetry
+                            ? `${dataStatus === 'demo' ? 'Demo' : 'Reported'} pack temperature: ${selectedTelemetry.pack_temp_c.toFixed(1)}°C · ${formatReadingAge(selectedTelemetry.timestamp, readingTime)}`
+                            : 'Pack temperature unavailable · Illustrative baseline 31.5°C'}
+                    />
+                )}
             </div>
 
-            <div className="bottom-row">
-                <BatteryHealthChart
-                    vehicles={vehicles}
-                    selectedVehicleId={selectedVehicleId}
-                />
-                <RegenBrakingPanel
-                    vehicles={vehicles}
-                    selectedVehicleId={selectedVehicleId}
-                    regenLevel={regenLevel}
-                />
+            <div className={`bottom-row ${showAdvanced ? '' : 'bottom-row--simple'}`}>
+                {showAdvanced && (
+                    <>
+                        <BatteryHealthChart
+                            vehicles={vehicles}
+                            selectedVehicleId={selectedVehicleId}
+                        />
+                        <RegenBrakingPanel
+                            vehicles={vehicles}
+                            selectedVehicleId={selectedVehicleId}
+                            regenLevel={regenLevel}
+                        />
+                    </>
+                )}
                 <ChargingPanel
                     vehicles={vehicles}
                     selectedVehicleId={selectedVehicleId}
