@@ -18,8 +18,9 @@ every listed capability exists in this repository.
 
 - `apps/web/` — React 19 dashboard. `src/App.tsx` composes the controls, fleet/map,
   elevation/SOC, thermal, battery-health, regen, and charging panels.
-  `src/components/RouteInputs.tsx` contains editable numeric route fields and road type;
-  `ControlsBar.tsx` supplies driving/HVAC/regen and submits the assessment form.
+  `src/components/RouteInputs.tsx` is the guided setup form (vehicle, numeric route
+  fields, road type, driving/HVAC/regen, submit); `ControlsBar.tsx` drives the route
+  preview playback and the advanced-panels toggle (thermal, SOH history, regen; hidden by default).
   `src/hooks/useFleetData.ts` polls vehicles/telemetry and runs simulations through
   the shared client. `src/mockData.ts` supplies demo data.
 - `apps/mobile/` — React Native / Expo SDK 57. `App.tsx` handles backend access and an
