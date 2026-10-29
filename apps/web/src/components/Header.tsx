@@ -17,10 +17,9 @@ export function Header({ fleetCount, routeDistance, batteryHealth }: HeaderProps
             </div>
 
             <div className="header-stats">
-                <StatCard label="FLEET VEHICLES" value={`${fleetCount} REGISTERED`} />
-                <StatCard label="DEMO ROUTE DISTANCE" value={`${routeDistance} KM`} />
-                <StatCard label="AVG BATTERY AGE" value="Unavailable" />
-                <StatCard label="FLEET SOH" value={`${batteryHealth}%`} />
+                <StatCard label="VEHICLES" value={`${fleetCount}`} />
+                <StatCard label="DEMO ROUTE" value={`${routeDistance} KM`} />
+                <StatCard label="AVG BATTERY HEALTH" value={`${batteryHealth}%`} />
             </div>
         </header>
     );

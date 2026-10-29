@@ -289,11 +289,11 @@ function App() {
                         {dataStatus === 'demo' ? 'Offline demo data' : 'Connection lost — showing cached fleet data'}. ({error})
                     </div>
                 )}
-                <div className="api-banner">
-                    {dataStatus === 'live' ? 'Backend connected' : dataStatus === 'cached' ? 'Cached backend fleet' : 'Demo fleet'}
-                    {lastFetchedAt && ` · Last fleet fetch: ${new Date(lastFetchedAt).toLocaleTimeString()}`}
-                    {' · Battery reading ages shown per vehicle; connection status does not establish freshness.'}
-                </div>
+                <p className={`data-status data-status--${dataStatus}`}>
+                    <span className="data-status-dot" aria-hidden="true" />
+                    {dataStatus === 'live' ? 'Live fleet data' : dataStatus === 'cached' ? 'Saved fleet data' : 'Demo fleet data'}
+                    {lastFetchedAt && ` · updated ${new Date(lastFetchedAt).toLocaleTimeString()}`}
+                </p>
 
                 {simulationError && (
                     <div className="api-banner api-banner--error" role="alert">

@@ -354,9 +354,9 @@ export function MapPanel({
                     pointerEvents: 'none',
                 }}
             >
-                <h3 className="panel-title">DEMO ROUTE PLAYBACK — GT-6 PORTLAND → BEND</h3>
+                <h3 className="panel-title">ROUTE MAP — PORTLAND → BEND (DEMO)</h3>
                 <span className="panel-badge" style={{ color: 'var(--accent-cyan)' }}>
-                    ILLUSTRATIVE POSITIONS
+                    SAMPLE POSITIONS
                 </span>
             </div>
 
