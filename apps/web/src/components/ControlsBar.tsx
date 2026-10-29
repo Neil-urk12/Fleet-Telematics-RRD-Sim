@@ -26,8 +26,8 @@ export function ControlsBar({
     return (
         <div className="controls-bar" role="group" aria-labelledby="route-preview-title">
             <div className="preview-title">
-                <h2 id="route-preview-title">Route preview</h2>
-                <span>Animates the demo route below. It does not change your result.</span>
+                <h2 id="route-preview-title">Example route animation</h2>
+                <span>For illustration only. Your trip result is shown above.</span>
             </div>
 
             {/* Playback Controls */}
@@ -46,21 +46,25 @@ export function ControlsBar({
                 >
                     ↺ Restart
                 </button>
-                <div className="controls-divider" />
-                <span className="ctrl-label" id="preview-speed">Speed</span>
-                {[1, 2, 4, 8].map(s => (
-                    <button
-                        key={s}
-                        aria-pressed={speed === s}
-                        aria-describedby="preview-speed"
-                        className={`ctrl-btn ctrl-btn--speed ${speed === s ? 'ctrl-btn--active' : ''}`}
-                        onClick={() => onSpeedChange(s)}
-                    >
-                        {s}×
-                    </button>
-                ))}
+                {showAdvanced && <>
+                    <div className="controls-divider" />
+                    <span className="ctrl-label" id="preview-speed">Speed</span>
+                    {[1, 2, 4, 8].map(s => (
+                        <button
+                            key={s}
+                            aria-pressed={speed === s}
+                            aria-describedby="preview-speed"
+                            className={`ctrl-btn ctrl-btn--speed ${speed === s ? 'ctrl-btn--active' : ''}`}
+                            onClick={() => onSpeedChange(s)}
+                        >
+                            {s}×
+                        </button>
+                    ))}
+                </>}
             </div>
 
+            {/* Speed and scrubber are demo-only detail, shown with the advanced panels. */}
+            {showAdvanced && <>
             <div className="controls-divider" />
 
             {/* Route Scrubber */}
@@ -81,6 +85,7 @@ export function ControlsBar({
                     {distanceKm} km
                 </span>
             </label>
+            </>}
 
             <button
                 className={`ctrl-btn advanced-toggle ${showAdvanced ? 'ctrl-btn--active' : ''}`}

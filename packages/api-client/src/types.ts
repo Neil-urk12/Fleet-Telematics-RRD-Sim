@@ -25,6 +25,9 @@ export function formatBatteryState(state: BatteryStateMetadata, now = Date.now()
   };
   const label = labels[state.state_source] ?? "Source unavailable";
   const recordedAt = state.state_timestamp ? Date.parse(state.state_timestamp) : NaN;
+  if (state.state_source === "vehicle_defaults" && !Number.isFinite(recordedAt)) {
+    return "No live data yet · using vehicle defaults";
+  }
   const date = Number.isFinite(recordedAt) ? `${new Date(recordedAt).toLocaleString()} · ` : "";
   return `${label} · ${date}${formatReadingAge(state.state_timestamp, now)}`;
 }

@@ -9,17 +9,17 @@ export function Header({ fleetCount, routeDistance, batteryHealth }: HeaderProps
         <header className="dashboard-header">
             <div className="header-left">
                 <h1 className="header-title">
-                    EV FLEET TELEMATICS — ROUTE DEGRADATION SIMULATOR
+                    EV Trip Range Checker
                 </h1>
                 <span className="header-subtitle">
-                    DEMO ROUTE GT-6 PORTLAND → BEND&nbsp;|&nbsp;ILLUSTRATIVE PLAYBACK
+                    EV Fleet Telematics · Route Range Degradation Simulator
                 </span>
             </div>
 
             <div className="header-stats">
-                <StatCard label="VEHICLES" value={`${fleetCount}`} />
-                <StatCard label="DEMO ROUTE" value={`${routeDistance} KM`} />
-                <StatCard label="AVG BATTERY HEALTH" value={`${batteryHealth}%`} />
+                <StatCard label="Vehicles" value={`${fleetCount}`} />
+                <StatCard label="Demo route" value={`${routeDistance} km`} />
+                <StatCard label="Avg battery health" value={`${batteryHealth}%`} />
             </div>
         </header>
     );

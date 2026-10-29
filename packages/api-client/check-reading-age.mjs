@@ -18,7 +18,7 @@ for (const [offset, expected] of [
 }
 assert.equal(formatReadingAge("2026-10-10T13:00:00+02:00", now), "Reading age: 1 h");
 assert.equal(formatBatteryState({ state_source: "vehicle_defaults", state_timestamp: null }, now),
-  "Vehicle defaults · Reading age unavailable");
+  "No live data yet · using vehicle defaults");
 assert.match(formatBatteryState({ state_source: "manual", state_timestamp: "invalid" }, now),
   /^Manual update · Reading age unavailable$/);
 const state = { state_source: "telemetry", state_timestamp: "2026-10-10T11:00:00Z" };

@@ -12,6 +12,14 @@ const FIELD_COPY: Record<keyof SimulationNumericParameters, { label: string; hin
     reserve_soc_target_pct: { label: 'Battery to keep on arrival (%)', hint: 'Your safety margin, 0–50' },
 };
 
+export interface RoutePreset {
+    label: string;
+    distanceKm: number;
+    gainM: number;
+    lossM: number;
+    roadType: RoadType;
+}
+
 const LEVELS = ['OFF', 'LOW', 'MEDIUM', 'HIGH'] as const;
 const levelLabel = (level: string) => level[0] + level.slice(1).toLowerCase();
 
@@ -51,6 +59,7 @@ interface RouteInputsProps {
     onVehicleChange: (vehicleId: string) => void;
     values: SimulationNumericDraft;
     roadType: RoadType;
+    presets: RoutePreset[];
     onValuesChange: (values: SimulationNumericDraft) => void;
     onRoadTypeChange: (roadType: RoadType) => void;
     drivingStyle: DrivingStyle;
@@ -69,6 +78,7 @@ export function RouteInputs({
     onVehicleChange,
     values,
     roadType,
+    presets,
     onValuesChange,
     onRoadTypeChange,
     drivingStyle,
@@ -82,6 +92,12 @@ export function RouteInputs({
 }: RouteInputsProps) {
     const [showErrors, setShowErrors] = useState(false);
     const { parameters, errors } = parseSimulationInputs(values);
+    // A preset stays highlighted until the user edits one of its fields.
+    const activePreset = presets.find(preset => parameters
+        && preset.distanceKm === parameters.route_distance_km
+        && preset.gainM === parameters.elevation_gain_m
+        && preset.lossM === parameters.elevation_loss_m
+        && preset.roadType === roadType)?.label ?? '';
 
     return (
         <form
@@ -100,13 +116,13 @@ export function RouteInputs({
             <div className="setup-header">
                 <h2>Will this trip make it?</h2>
                 <p className="route-inputs-hint">
-                    Pick a vehicle, describe the trip, then press Simulate. Defaults match the Portland → Bend route on the map.
+                    Pick a vehicle and an example trip (or type your own numbers), then press Simulate trip.
                 </p>
             </div>
 
             <div className="setup-steps">
                 <section className="setup-step" aria-labelledby="step-vehicle">
-                    <h3 id="step-vehicle"><span className="step-num" aria-hidden="true">1</span>Vehicle</h3>
+                    <h3 id="step-vehicle"><span className="step-num" aria-hidden="true">1</span>Vehicle & route</h3>
                     <label className="route-field">
                         <span>Which vehicle?</span>
                         <select
@@ -121,6 +137,23 @@ export function RouteInputs({
                         </select>
                         <span className="route-field-hint">Also selectable from the fleet list</span>
                     </label>
+                    <ChoiceGroup
+                        legend="Start from an example trip"
+                        hint="Fills distance, hills and road type. You can still edit them."
+                        options={presets.map(preset => ({ value: preset.label, label: preset.label }))}
+                        value={activePreset}
+                        onChange={label => {
+                            const preset = presets.find(p => p.label === label);
+                            if (!preset) return;
+                            onValuesChange({
+                                ...values,
+                                route_distance_km: String(preset.distanceKm),
+                                elevation_gain_m: String(preset.gainM),
+                                elevation_loss_m: String(preset.lossM),
+                            });
+                            onRoadTypeChange(preset.roadType);
+                        }}
+                    />
                 </section>
 
                 <section className="setup-step" aria-labelledby="step-trip">

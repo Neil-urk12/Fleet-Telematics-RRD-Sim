@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { FleetPanel } from './components/FleetPanel';
 import { ControlsBar } from './components/ControlsBar';
 import { RouteInputs } from './components/RouteInputs';
+import type { RoutePreset } from './components/RouteInputs';
 import { SimulationResult } from './components/SimulationResult';
 import { FleetComparison } from './components/FleetComparison';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
@@ -44,6 +45,13 @@ const DEMO_ELEVATION = ELEVATION_DATA.reduce((totals, point, index) => {
     }
     return totals;
 }, { gain: 0, loss: 0 });
+
+// Example trips that fill the route fields; only Portland → Bend matches the map.
+const ROUTE_PRESETS: RoutePreset[] = [
+    { label: 'Portland → Bend (mountain pass)', distanceKm: TOTAL_DISTANCE, gainM: DEMO_ELEVATION.gain, lossM: DEMO_ELEVATION.loss, roadType: 'MIXED' },
+    { label: 'City deliveries', distanceKm: 60, gainM: 120, lossM: 120, roadType: 'URBAN' },
+    { label: 'Flat highway run', distanceKm: 200, gainM: 150, lossM: 150, roadType: 'HIGHWAY' },
+];
 
 // Helper to compute physics-informed SOC curve along the route
 function buildDynamicSocData(
@@ -307,6 +315,7 @@ function App() {
                     onVehicleChange={setSelectedVehicleId}
                     values={routeValues}
                     roadType={roadType}
+                    presets={ROUTE_PRESETS}
                     onValuesChange={setRouteValues}
                     onRoadTypeChange={setRoadType}
                     drivingStyle={drivingStyle}
