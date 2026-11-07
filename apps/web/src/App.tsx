@@ -8,6 +8,7 @@ import { RouteInputs } from './components/RouteInputs';
 import type { RoutePreset } from './components/RouteInputs';
 import { SimulationResult } from './components/SimulationResult';
 import { FleetComparison } from './components/FleetComparison';
+import { AssessmentHistory } from './components/AssessmentHistory';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
 import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
@@ -95,7 +96,7 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, getSimulationHistory } = useFleetData();
 
     const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>('EV-001');
     const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
@@ -323,6 +324,13 @@ function App() {
                             }}
                         />
                     </SimulationResult>
+                )}
+                {selectedVehicleId && (
+                    <AssessmentHistory
+                        vehicleId={selectedVehicleId}
+                        refreshKey={assessment}
+                        loadHistory={getSimulationHistory}
+                    />
                 )}
                 <ControlsBar
                     isRunning={isRunning}

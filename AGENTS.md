@@ -22,7 +22,9 @@ every listed capability exists in this repository.
   fields, road type, driving/HVAC/regen, submit); `ControlsBar.tsx` drives the route
   preview playback and the advanced-panels toggle (thermal, SOH history, regen; hidden by default).
   `src/hooks/useFleetData.ts` polls vehicles/telemetry and runs simulations through
-  the shared client. `src/mockData.ts` supplies demo data. `src/routeData.ts` is the
+  the shared client. `AssessmentHistory.tsx` lists the selected vehicle's 10 newest saved
+  backend assessments (including batch/compare runs); it shows no rows when the backend is
+  unreachable. `src/mockData.ts` supplies demo data. `src/routeData.ts` is the
   generated Portland → Bend dataset (do not edit by hand) that feeds the Leaflet map in
   `MapPanel.tsx`, the elevation chart, the example trip, and the sample charging stations.
 - `apps/mobile/` — React Native / Expo SDK 57. `App.tsx` handles backend access and an
@@ -30,7 +32,8 @@ every listed capability exists in this repository.
   simulator, alerts, and more screens. Read `apps/mobile/AGENTS.md` before editing.
 - `packages/api-client/` — Shared TypeScript types, typed HTTP client, and numeric
   route-input parsing/validation in `src/`. `check-*.mjs` are standalone
-  `node:assert` checks for the shared client, run via `pnpm test:client`.
+  `node:assert` checks for the shared client (reading age, fleet comparison, battery
+  history, saved-assessment history), run via `pnpm test:client`.
 - `backend/` — FastAPI, Python 3.11, managed with `uv`.
   - `app/main.py` — CORS and routers under `/api/{vehicles,telemetry,simulation}`;
     `/api/health` health check.

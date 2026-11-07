@@ -214,3 +214,11 @@ export interface SimulationResponse extends BatteryStateMetadata {
   arrival_soc_low_pct?: number | null;
   arrival_soc_high_pct?: number | null;
 }
+
+/** A saved backend assessment; `timestamp` is the server UTC save time. */
+export interface SimulationRecord {
+  id: string;
+  timestamp: string;
+  request: SimulationRequest;
+  response: SimulationResponse;
+}

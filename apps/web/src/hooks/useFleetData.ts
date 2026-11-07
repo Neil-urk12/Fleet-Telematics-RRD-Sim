@@ -61,6 +61,7 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     }, []);
 
     const runBatchSimulation = useCallback((req: BatchSimulationRequest) => api.runBatchSimulation(req), []);
+    const getSimulationHistory = useCallback((vehicleId: string) => api.getSimulationHistory(vehicleId), []);
 
     useEffect(() => {
         fetchData();
@@ -74,6 +75,6 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     return {
         vehicles, telemetry, assessment, loading, error, simulationError, dataStatus,
         readingTime, lastFetchedAt,
-        isSimulating, refetch: fetchData, runSimulation, runBatchSimulation,
+        isSimulating, refetch: fetchData, runSimulation, runBatchSimulation, getSimulationHistory,
     };
 }

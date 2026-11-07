@@ -4,6 +4,7 @@ import type {
   BatchTelemetryRequest,
   BatchTelemetryResponse,
   FleetTelemetryResponse,
+  SimulationRecord,
   SimulationRequest,
   SimulationResponse,
   TelemetryEvent,
@@ -149,6 +150,11 @@ export class FleetApiClient {
       method: "POST",
       body: JSON.stringify(req),
     });
+  }
+
+  async getSimulationHistory(vehicleId?: string): Promise<SimulationRecord[]> {
+    const query = vehicleId === undefined ? "" : `?vehicle_id=${encodeURIComponent(vehicleId)}`;
+    return this.fetchJson<SimulationRecord[]>(`/api/simulation/history${query}`);
   }
 
   // Health
