@@ -14,9 +14,15 @@ interface BottomNavBarProps {
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   currentTab,
   onSelectTab,
-  alertCount = 3,
+  alertCount = 0,
 }) => {
   const insets = useSafeAreaInsets();
+
+  // Normalize legacy tab names
+  const activeNormalizedTab: TabType =
+    currentTab === "fleet" ? "vehicles" :
+    currentTab === "simulator" ? "planner" :
+    currentTab;
 
   const tabs: {
     id: TabType;
@@ -28,33 +34,38 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     {
       id: "dashboard",
       label: "Dashboard",
-      activeIcon: "view-dashboard",
-      inactiveIcon: "view-dashboard-outline",
+      activeIcon: "view-grid",
+      inactiveIcon: "view-grid-outline",
     },
     {
-      id: "fleet",
-      label: "Fleet",
-      activeIcon: "car",
-      inactiveIcon: "car-outline",
+      id: "vehicles",
+      label: "Vehicles",
+      activeIcon: "truck",
+      inactiveIcon: "truck-outline",
     },
     {
-      id: "simulator",
-      label: "Simulator",
-      activeIcon: "leaf-circle",
-      inactiveIcon: "leaf-circle-outline",
+      id: "garage",
+      label: "Garage",
+      activeIcon: "garage",
+      inactiveIcon: "garage-open-variant",
     },
     {
-      id: "alerts",
-      label: "Alerts",
-      activeIcon: "bell",
-      inactiveIcon: "bell-outline",
-      showBadge: alertCount > 0,
+      id: "planner",
+      label: "Trip planner",
+      activeIcon: "check-circle",
+      inactiveIcon: "check-circle-outline",
     },
     {
-      id: "more",
-      label: "More",
-      activeIcon: "menu",
-      inactiveIcon: "menu",
+      id: "route",
+      label: "Route & charging",
+      activeIcon: "map",
+      inactiveIcon: "map-outline",
+    },
+    {
+      id: "battery",
+      label: "Battery",
+      activeIcon: "battery-charging",
+      inactiveIcon: "battery-charging-outline",
     },
   ];
 
@@ -62,29 +73,30 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     <View
       style={[
         styles.container,
-        { paddingBottom: Math.max(insets.bottom, 8) },
+        { paddingBottom: Math.max(insets.bottom, 6) },
       ]}
     >
       <View style={styles.navRow}>
         {tabs.map((tab) => {
-          const isActive = currentTab === tab.id;
-          const iconColor = isActive ? colors.navActive : colors.navInactive;
+          const isActive =
+            activeNormalizedTab === tab.id || currentTab === tab.id;
+          const iconColor = isActive ? colors.accentCyan : colors.navInactive;
           const iconName = isActive ? tab.activeIcon : tab.inactiveIcon;
 
           return (
             <TouchableOpacity
               key={tab.id}
-              style={styles.tabItem}
+              style={[styles.tabItem, isActive && styles.tabItemActive]}
               onPress={() => onSelectTab(tab.id)}
               activeOpacity={0.7}
             >
               <View style={styles.iconWrapper}>
                 <MaterialCommunityIcons
                   name={iconName}
-                  size={24}
+                  size={20}
                   color={iconColor}
                 />
-                {tab.showBadge && (
+                {tab.showBadge && alertCount > 0 && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
                       {alertCount > 9 ? "9+" : alertCount}
@@ -93,6 +105,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                 )}
               </View>
               <Text
+                numberOfLines={1}
                 style={[
                   styles.tabLabel,
                   { color: iconColor, fontWeight: isActive ? "600" : "400" },
@@ -110,33 +123,42 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.navBg,
+    backgroundColor: colors.bgBase,
     borderTopWidth: 1,
-    borderTopColor: colors.navBorder,
-    paddingTop: 8,
+    borderTopColor: colors.borderColor,
+    paddingTop: 6,
   },
   navRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
   },
   tabItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 4,
+    paddingHorizontal: 2,
+    borderRadius: 12,
+  },
+  tabItemActive: {
+    backgroundColor: "rgba(0, 194, 255, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 194, 255, 0.35)",
   },
   iconWrapper: {
     position: "relative",
-    width: 28,
-    height: 28,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
   },
   tabLabel: {
-    fontSize: 11,
-    marginTop: 4,
+    fontSize: 9.5,
+    marginTop: 2,
     letterSpacing: 0.1,
+    textAlign: "center",
   },
   badge: {
     position: "absolute",
@@ -144,17 +166,17 @@ const styles = StyleSheet.create({
     right: -7,
     backgroundColor: colors.riskDanger,
     borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    minWidth: 14,
+    height: 14,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
+    paddingHorizontal: 2,
     borderWidth: 1.5,
-    borderColor: colors.navBg,
+    borderColor: colors.bgBase,
   },
   badgeText: {
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "700",
   },
 });

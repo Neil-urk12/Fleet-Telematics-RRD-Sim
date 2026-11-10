@@ -14,29 +14,30 @@ import {
   SimulatorScreen,
   AlertsScreen,
   MoreScreen,
+  BatteryScreen,
 } from "./src/screens";
 
 const fallbackVehicles: Vehicle[] = [
   {
-    id: "v-transit-01",
-    name: "Transit Van Alpha",
+    id: "DL641",
+    name: "VANZ",
     model: "Ford E-Transit (High Roof)",
-    battery_capacity_kwh: 68,
-    baseline_efficiency_wh_km: 260,
-    current_soc: 82,
-    current_soh: 98,
+    battery_capacity_kwh: 74,
+    baseline_efficiency_wh_km: 175,
+    current_soc: 80,
+    current_soh: 100,
     status: "ACTIVE",
     state_source: "vehicle_defaults",
     state_timestamp: null,
   },
   {
-    id: "v-edv-02",
-    name: "Rivian Prime 700",
+    id: "DL642",
+    name: "ISUKA",
     model: "Rivian Commercial EDV",
-    battery_capacity_kwh: 135,
-    baseline_efficiency_wh_km: 380,
-    current_soc: 44,
-    current_soh: 96,
+    battery_capacity_kwh: 65,
+    baseline_efficiency_wh_km: 185,
+    current_soc: 72,
+    current_soh: 100,
     status: "ACTIVE",
     state_source: "vehicle_defaults",
     state_timestamp: null,
@@ -56,7 +57,7 @@ const fallbackVehicles: Vehicle[] = [
 ];
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<TabType>("simulator");
+  const [currentTab, setCurrentTab] = useState<TabType>("dashboard");
   const [vehicles, setVehicles] = useState<Vehicle[]>(fallbackVehicles);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(fallbackVehicles[0]);
   const [assessment, setAssessment] = useState<SimulationAssessment | null>(null);
@@ -216,6 +217,15 @@ export default function App() {
         </Text>
         {/* Screen Container */}
         <View style={styles.content}>
+          {currentTab === "battery" && (
+            <BatteryScreen
+              vehicles={vehicles}
+              selectedVehicle={selectedVehicle}
+              onSelectVehicle={setSelectedVehicle}
+              onNavigateTab={setCurrentTab}
+            />
+          )}
+
           {currentTab === "dashboard" && (
             <DashboardScreen
               vehicles={vehicles}
@@ -226,7 +236,7 @@ export default function App() {
             />
           )}
 
-          {currentTab === "fleet" && (
+          {(currentTab === "fleet" || currentTab === "vehicles" || currentTab === "garage") && (
             <FleetScreen
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
@@ -239,7 +249,7 @@ export default function App() {
             />
           )}
 
-          {currentTab === "simulator" && (
+          {(currentTab === "simulator" || currentTab === "planner" || currentTab === "route") && (
             <SimulatorScreen
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
