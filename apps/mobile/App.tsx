@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View } from "react-native";
+import { AppState, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import type { SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
+import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
+import type { SimulationAssessment, SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
 
-import { client, API_URL } from "./src/config/api";
+import { client } from "./src/config/api";
 import { colors } from "./src/constants/theme";
 import { BottomNavBar, type TabType } from "./src/navigation";
 import {
@@ -25,6 +26,8 @@ const fallbackVehicles: Vehicle[] = [
     current_soc: 82,
     current_soh: 98,
     status: "ACTIVE",
+    state_source: "vehicle_defaults",
+    state_timestamp: null,
   },
   {
     id: "v-edv-02",
@@ -35,6 +38,8 @@ const fallbackVehicles: Vehicle[] = [
     current_soc: 44,
     current_soh: 96,
     status: "ACTIVE",
+    state_source: "vehicle_defaults",
+    state_timestamp: null,
   },
   {
     id: "v-sprinter-03",
@@ -45,6 +50,8 @@ const fallbackVehicles: Vehicle[] = [
     current_soc: 18,
     current_soh: 99,
     status: "IDLE",
+    state_source: "vehicle_defaults",
+    state_timestamp: null,
   },
 ];
 
@@ -52,34 +59,57 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>("simulator");
   const [vehicles, setVehicles] = useState<Vehicle[]>(fallbackVehicles);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(fallbackVehicles[0]);
-  const [simResult, setSimResult] = useState<SimulationResponse | null>(null);
+  const [assessment, setAssessment] = useState<SimulationAssessment | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fleetError, setFleetError] = useState<string | null>(null);
+  const [dataStatus, setDataStatus] = useState<"demo" | "live" | "cached">("demo");
+  const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
+  // Advance reading ages even when a failed fetch leaves the cached values unchanged.
+  const [, refreshReadingAges] = useState(Date.now);
+  const hasBackendData = useRef(false);
+  const fetchingVehicles = useRef(false);
 
-  useEffect(() => {
-    loadVehicles();
-  }, []);
-
-  async function loadVehicles() {
-    setLoading(true);
-    setError(null);
+  const loadVehicles = useCallback(async (showLoading = true) => {
+    if (fetchingVehicles.current) return;
+    fetchingVehicles.current = true;
+    if (showLoading) setLoading(true);
     try {
       const data = await client.getVehicles();
-      if (data && data.length > 0) {
-        setVehicles(data);
-        setSelectedVehicle(data[0]);
-      }
-    } catch (err: any) {
-      console.warn("Backend not reachable, using mock fleet data:", err?.message);
-      // Keep fallbackVehicles so UI never breaks
-      if (!selectedVehicle) {
-        setSelectedVehicle(fallbackVehicles[0]);
-      }
+      setVehicles(data);
+      setSelectedVehicle(previous => data.find(vehicle => vehicle.id === previous?.id) ?? data[0] ?? null);
+      hasBackendData.current = true;
+      setLastFetchedAt(new Date().toISOString());
+      setDataStatus("live");
+      setFleetError(null);
+    } catch (err) {
+      setFleetError(err instanceof Error ? err.message : "Failed to load fleet");
+      setDataStatus(hasBackendData.current ? "cached" : "demo");
     } finally {
-      setLoading(false);
+      fetchingVehicles.current = false;
+      if (showLoading) setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    let active = AppState.currentState !== "background" && AppState.currentState !== "inactive";
+    const refresh = () => {
+      if (!active) return;
+      refreshReadingAges(Date.now());
+      void loadVehicles(false);
+    };
+    if (active) void loadVehicles();
+    const interval = setInterval(refresh, 5000);
+    const subscription = AppState.addEventListener("change", state => {
+      active = state === "active";
+      if (active) refresh();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [loadVehicles]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -87,17 +117,29 @@ export default function App() {
     setRefreshing(false);
   };
 
-  async function handleRunSimulation(params: SimulationRequest): Promise<SimulationResponse | null> {
+  async function handleRunSimulation(params: Required<SimulationRequest>): Promise<SimulationResponse | null> {
+    const request = { ...params };
     setLoading(true);
     setError(null);
+    setAssessment(null);
     try {
-      const result = await client.runSimulation(params);
-      setSimResult(result);
+      const result = await client.runSimulation(request);
+      setAssessment({ request, response: result, origin: "backend" });
       return result;
-    } catch (err: any) {
-      console.warn("API simulation call failed, calculating local physics fallback:", err?.message);
+    } catch (err) {
+      if (err instanceof FleetApiError) {
+        setError(err.message);
+        return null;
+      }
+      setFleetError(err instanceof Error ? err.message : "Failed to connect to fleet backend");
+      setDataStatus(hasBackendData.current ? "cached" : "demo");
+      setError("Backend simulation unavailable; showing an offline demo estimate.");
       // Realistic physics approximation fallback if offline
       const vehicle = vehicles.find((v) => v.id === params.vehicle_id) || selectedVehicle || fallbackVehicles[0];
+      if (vehicle.battery_capacity_kwh <= 0 || vehicle.current_soh <= 0) {
+        setError("Vehicle has no usable battery capacity; route assessment is unavailable");
+        return null;
+      }
       const startSoc = vehicle.current_soc ?? 80;
       const baseKwhPerKm = (vehicle.baseline_efficiency_wh_km || 280) / 1000;
       
@@ -107,7 +149,7 @@ export default function App() {
 
       const payloadPenalty = 1 + (payloadKg / 2000) * 0.15;
       const elevationWorkKwh = (elevationGainM * 2500 * 9.81) / (3.6e6 * 0.85);
-      const hvacKw = params.hvac_mode === "HIGH" ? 3.5 : params.hvac_mode === "LOW" ? 1.5 : 0;
+      const hvacKw = { OFF: 0, LOW: 1.5, MEDIUM: 2.2, HIGH: 3.5 }[params.hvac_mode ?? "LOW"];
       const drivingMult = params.driving_style === "AGGRESSIVE" ? 1.25 : params.driving_style === "ECO" ? 0.88 : 1.0;
       
       const estimatedConsumptionKwh =
@@ -116,8 +158,9 @@ export default function App() {
         hvacKw * (params.route_distance_km / 65);
       
       const socConsumedPct = (estimatedConsumptionKwh / vehicle.battery_capacity_kwh) * 100;
-      const projectedArrivalSoc = Math.max(0, startSoc - socConsumedPct);
-      const remainingRange = (projectedArrivalSoc / 100) * ((vehicle.battery_capacity_kwh * 1000) / (vehicle.baseline_efficiency_wh_km || 280));
+      // Preserve energy deficits so zero reserve cannot make an infeasible route acceptable.
+      const projectedArrivalSoc = startSoc - socConsumedPct;
+      const remainingRange = (Math.max(0, projectedArrivalSoc) / 100) * ((vehicle.battery_capacity_kwh * 1000) / (vehicle.baseline_efficiency_wh_km || 280));
       
       const riskLevel: "SAFE" | "CAUTION" | "NOT_RECOMMENDED" =
         projectedArrivalSoc < targetReservePct
@@ -128,6 +171,11 @@ export default function App() {
 
       const mockResponse: SimulationResponse = {
         vehicle_id: vehicle.id,
+        vehicle_profile: getSimulationVehicleProfile(vehicle),
+        starting_soc_pct: vehicle.current_soc,
+        starting_soh_pct: vehicle.current_soh,
+        state_source: vehicle.state_source,
+        state_timestamp: vehicle.state_timestamp,
         usable_battery_capacity_kwh: vehicle.battery_capacity_kwh * 0.95,
         projected_arrival_soc_pct: Number(projectedArrivalSoc.toFixed(1)),
         estimated_energy_consumption_kwh: Number(estimatedConsumptionKwh.toFixed(1)),
@@ -137,11 +185,13 @@ export default function App() {
         recommendations: [
           riskLevel === "NOT_RECOMMENDED"
             ? "Route exceeds safe battery threshold. Consider intermediate fast charging or reduced HVAC."
+            : riskLevel === "CAUTION"
+            ? "Arrival margin is limited. Charge before departure or reduce demand and assess again."
             : "Energy margin is sufficient. Maintain Eco/Normal mode on highway sections.",
         ],
       };
 
-      setSimResult(mockResponse);
+      setAssessment({ request, response: mockResponse, origin: "local" });
       return mockResponse;
     } finally {
       setLoading(false);
@@ -158,6 +208,12 @@ export default function App() {
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
         <StatusBar style="light" />
 
+        <Text style={styles.dataBanner} accessibilityRole="text">
+          {dataStatus === "live" ? "Backend connected" : dataStatus === "demo" ? "Demo fleet data" : "Connection lost — showing cached fleet data"}
+          {lastFetchedAt ? ` · Last fleet fetch: ${new Date(lastFetchedAt).toLocaleTimeString()}` : ""}
+          {" · Battery reading ages shown per vehicle."}
+          {fleetError ? ` · ${fleetError}` : ""}
+        </Text>
         {/* Screen Container */}
         <View style={styles.content}>
           {currentTab === "dashboard" && (
@@ -175,7 +231,7 @@ export default function App() {
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
               loading={loading}
-              error={error}
+              error={fleetError}
               onSelectVehicle={setSelectedVehicle}
               onRefresh={handleRefresh}
               onSimulateWithVehicle={handleSimulateWithVehicle}
@@ -189,7 +245,7 @@ export default function App() {
               selectedVehicle={selectedVehicle}
               onSelectVehicle={setSelectedVehicle}
               onRunSimulation={handleRunSimulation}
-              simResult={simResult}
+              assessment={assessment}
               loading={loading}
               error={error}
               refreshing={refreshing}
@@ -217,7 +273,7 @@ export default function App() {
         <BottomNavBar
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
-          alertCount={2}
+          alertCount={0}
         />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -228,6 +284,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
+  },
+  dataBanner: {
+    color: colors.riskCautionText,
+    backgroundColor: colors.riskCautionBg,
+    padding: 10,
+    fontSize: 12,
   },
   content: {
     flex: 1,

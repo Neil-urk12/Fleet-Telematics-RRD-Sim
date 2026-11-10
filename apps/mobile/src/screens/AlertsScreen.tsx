@@ -132,8 +132,8 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
       }
     >
       <Header
-        title="Telematics Alerts"
-        subtitle="Safety Warnings & Route-Risk Notifications"
+        title="Demo Alerts"
+        subtitle="Illustrative examples · Live risk alerts unavailable"
       />
 
       {/* Filter Chips & Mark All Read */}

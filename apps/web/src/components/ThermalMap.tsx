@@ -5,9 +5,10 @@ interface ThermalMapProps {
     maxTemp: number;
     avgTemp: number;
     packHealthPct?: number;
+    readingLabel: string;
 }
 
-export function ThermalMap({ cellTemps, maxTemp, avgTemp }: ThermalMapProps) {
+export function ThermalMap({ cellTemps, maxTemp, avgTemp, readingLabel }: ThermalMapProps) {
     const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number; temp: number } | null>(null);
     const hotspot = findHotspot(cellTemps);
     const minTemp = Math.min(...cellTemps.flat());
@@ -23,11 +24,12 @@ export function ThermalMap({ cellTemps, maxTemp, avgTemp }: ThermalMapProps) {
     return (
         <div className="thermal-panel" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <div className="panel-header">
-                <h3 className="panel-title">BATTERY PACK THERMAL DISTRIBUTION</h3>
+                <h3 className="panel-title">ILLUSTRATIVE PACK THERMAL GRID</h3>
                 <span className="panel-badge" style={{ color: statusColor }}>
                     ● {thermalStatus}
                 </span>
             </div>
+            <p className="data-note">{readingLabel}. Module temperatures and thermal status are local estimates.</p>
 
             {/* Thermal Grid of Battery Pack Modules (4 x 6) */}
             <div

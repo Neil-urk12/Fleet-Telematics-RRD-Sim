@@ -130,7 +130,7 @@ export function ElevationChart({
         }
         ctx.stroke();
 
-        // 3. Peak summit label (Government Camp ~1490m)
+        // 3. Peak summit label (Baguio, ~1450 m in the SRTM samples)
         const peakPoint = elevationData.reduce((prev, curr) => curr.elevation > prev.elevation ? curr : prev, elevationData[0]);
         const peakX = xScale(peakPoint.distance);
         const peakY = yScaleElev(peakPoint.elevation);
@@ -233,11 +233,11 @@ export function ElevationChart({
         ctx.textAlign = 'left';
         ctx.fillStyle = '#00c2ff';
         ctx.font = 'bold 9px Inter, sans-serif';
-        ctx.fillText('─── SOC %', margin.left + 4, margin.top - 10);
+        ctx.fillText('─── Battery %', margin.left + 4, margin.top - 10);
         ctx.fillStyle = 'rgba(148, 163, 184, 0.9)';
-        ctx.fillText('  ▬  Elevation Profile', margin.left + 65, margin.top - 10);
+        ctx.fillText('  ▬  Hills (height)', margin.left + 85, margin.top - 10);
         ctx.fillStyle = '#10b981';
-        ctx.fillText(`  ● Live Pos: ${currentDist.toFixed(1)} km`, margin.left + 175, margin.top - 10);
+        ctx.fillText(`  ● Now: ${currentDist.toFixed(1)} km`, margin.left + 180, margin.top - 10);
 
     }, [elevationData, socData, totalDistance, progressFraction, currentDist, currentElevation, currentSoc, hoverPoint]);
 
@@ -276,16 +276,18 @@ export function ElevationChart({
     return (
         <div className="elevation-panel" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <div className="panel-header">
-                <h3 className="panel-title">ELEVATION PROFILE &amp; STATE OF CHARGE DECAY</h3>
+                <h3 className="panel-title">HILLS &amp; BATTERY ALONG THE ROUTE (DEMO)</h3>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <span className="panel-badge" style={{ color: 'var(--accent-cyan)' }}>
-                        ALT: {Math.round(currentElevation)} m
+                        HEIGHT: {Math.round(currentElevation)} m
                     </span>
                     <span className="panel-badge" style={{ color: currentSoc > 30 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                        SOC: {currentSoc.toFixed(1)}%
+                        BATTERY: {currentSoc.toFixed(1)}%
                     </span>
                 </div>
             </div>
+
+            <p className="assessment-note">Rough estimate for the Manila → Baguio demo route. Run your own trip in Trip planner.</p>
 
             <canvas
                 ref={canvasRef}

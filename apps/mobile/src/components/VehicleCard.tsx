@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { formatBatteryState } from "@fleet/api-client";
 import type { Vehicle } from "@fleet/api-client";
 import { colors } from "../constants/theme";
 
@@ -21,6 +22,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
     >
       <Text style={styles.vehicleName}>{vehicle.name}</Text>
       <Text style={styles.vehicleModel}>{vehicle.model}</Text>
+      <Text style={styles.vehicleModel}>{formatBatteryState(vehicle)}</Text>
       <View style={styles.badge}>
         <Text style={styles.badgeText}>SOC: {vehicle.current_soc}%</Text>
       </View>

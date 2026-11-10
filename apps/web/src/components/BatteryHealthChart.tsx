@@ -1,9 +1,20 @@
 import { useRef, useEffect } from 'react';
+import { formatBatteryHistory } from '@fleet/api-client';
 import type { Vehicle } from '@fleet/api-client';
 
 interface BatteryHealthChartProps {
     vehicles: Vehicle[];
     selectedVehicleId?: string | null;
+}
+
+/** Summarize a vehicle's reported operating history for a single-line readout. */
+function formatReportedHistory(vehicle: Vehicle): string {
+    const parts: string[] = [];
+    parts.push(vehicle.cycle_count == null ? 'cycles not reported' : `${vehicle.cycle_count} cycles`);
+    parts.push(vehicle.avg_dod_pct == null ? 'DoD not reported' : `DoD ${vehicle.avg_dod_pct}%`);
+    parts.push(vehicle.fast_charge_share_pct == null ? 'fast-charge not reported' : `fast-charge ${vehicle.fast_charge_share_pct}%`);
+    parts.push(vehicle.thermal_stress_index == null ? 'thermal not reported' : `thermal ${vehicle.thermal_stress_index}`);
+    return parts.join(' · ');
 }
 
 const MONTHS = ['MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP'];
@@ -22,10 +33,7 @@ const VEHICLE_COLORS = ['#00c2ff', '#10b981', '#f59e0b', '#a78bfa', '#ef4444', '
 
 export function BatteryHealthChart({ vehicles, selectedVehicleId }: BatteryHealthChartProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    const avgSoh = vehicles.reduce((s, v) => s + v.current_soh, 0) / (vehicles.length || 1);
-    const startAvg = vehicles.reduce((s, v) => s + (SOH_HISTORY[v.id]?.[0] ?? v.current_soh), 0) / (vehicles.length || 1);
-    const degradationRate = (startAvg - avgSoh) / MONTHS.length;
+    const selectedVehicle = vehicles.find(vehicle => vehicle.id === selectedVehicleId);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -147,12 +155,18 @@ export function BatteryHealthChart({ vehicles, selectedVehicleId }: BatteryHealt
     return (
         <div className="health-panel" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="panel-header">
-                <h3 className="panel-title">BATTERY STATE OF HEALTH (SOH) — 7-MO DEGRADATION</h3>
+                <h3 className="panel-title">DEMO SOH HISTORY — 7 MONTHS</h3>
                 <span className="panel-badge" style={{ color: 'var(--accent-yellow)' }}>
-                    AVG −{degradationRate.toFixed(2)}%/mo
+                    ILLUSTRATIVE TRENDS
                 </span>
             </div>
+            <p className="data-note">Fixed example history. Current SOH and reading age appear in the fleet list.</p>
             <canvas ref={canvasRef} style={{ width: '100%', flex: 1, minHeight: 0 }} />
+            <p className="data-note" style={{ marginTop: 0 }}>
+                {selectedVehicle
+                    ? `${selectedVehicle.id} reported history: ${formatReportedHistory(selectedVehicle)} · ${formatBatteryHistory(selectedVehicle.battery_history)}`
+                    : 'Select a vehicle to see its reported operating history.'}
+            </p>
         </div>
     );
 }

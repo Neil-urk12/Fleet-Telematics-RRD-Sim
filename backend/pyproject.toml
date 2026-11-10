@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.141.1",
+    "libsql>=0.1.11",
     "numpy>=2.4.6",
     "pandas>=3.0.5",
     "pydantic>=2.13.4",
@@ -15,6 +16,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "ruff>=0.16.5",
 ]
 

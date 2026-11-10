@@ -1,0 +1,24 @@
+/* Garage loading veil and the placeholder shown before the 3D chunk arrives.
+   In the main bundle, so values fall back for when garage.css has not loaded yet. */
+.garage-placeholder {
+    position: relative;
+    flex: 1 0 auto;
+    min-height: 600px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: #0a0c0f;
+}
+
+/* Opaque enough to hide the half-built scene; the registration form and model row sit above it (z-index 3). */
+.garage-loading { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; text-align: center; gap: 12px; background: radial-gradient(80% 60% at 50% 60%, rgba(20, 24, 30, .55), rgba(5, 6, 8, .96)); font-family: var(--f-data, ui-monospace, monospace); letter-spacing: .06em; color: var(--g-chalk, #ebe6dc); }
+.garage-loading p { margin: 0; }
+
+.garage-progress { width: 220px; height: 4px; border-radius: 2px; overflow: hidden; background: rgba(235, 230, 220, .14); }
+.garage-progress i { display: block; height: 100%; border-radius: 2px; background: var(--g-hazard, #f0b323); transition: width .3s ease-out; }
+.garage-progress i.indeterminate { width: 35%; animation: garage-progress-slide 1.2s ease-in-out infinite; }
+@keyframes garage-progress-slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) {
+    .garage-progress i { transition: none; }
+    .garage-progress i.indeterminate { animation: none; width: 100%; opacity: .5; }
+}

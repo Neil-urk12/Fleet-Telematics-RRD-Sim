@@ -1,11 +1,93 @@
 export type VehicleStatus = "AVAILABLE" | "CHARGING" | "MAINTENANCE" | "IN_USE" | string;
 
-export interface Vehicle {
+export type BatteryStateSource = "telemetry" | "vehicle_defaults" | "manual";
+
+export interface BatteryStateMetadata {
+  state_source: BatteryStateSource;
+  state_timestamp: string | null;
+}
+
+export function formatReadingAge(timestamp: string | null | undefined, now = Date.now()): string {
+  const recordedAt = timestamp ? Date.parse(timestamp) : NaN;
+  if (!Number.isFinite(recordedAt)) return "Reading age unavailable";
+  const elapsed = now - recordedAt;
+  const minutes = Math.floor(Math.abs(elapsed) / 60_000);
+  const age = minutes < 1 ? "<1 min" : minutes < 60 ? `${minutes} min`
+    : minutes < 1440 ? `${Math.floor(minutes / 60)} h` : `${Math.floor(minutes / 1440)} d`;
+  return elapsed < 0 ? `Timestamp ${age} ahead of device clock` : `Reading age: ${age}`;
+}
+
+export function formatBatteryState(state: BatteryStateMetadata, now = Date.now()): string {
+  const labels: Record<BatteryStateSource, string> = {
+    telemetry: "Telemetry",
+    vehicle_defaults: "Vehicle defaults",
+    manual: "Manual update",
+  };
+  const label = labels[state.state_source] ?? "Source unavailable";
+  const recordedAt = state.state_timestamp ? Date.parse(state.state_timestamp) : NaN;
+  if (state.state_source === "vehicle_defaults" && !Number.isFinite(recordedAt)) {
+    return "No live data yet · using vehicle defaults";
+  }
+  const date = Number.isFinite(recordedAt) ? `${new Date(recordedAt).toLocaleString()} · ` : "";
+  return `${label} · ${date}${formatReadingAge(state.state_timestamp, now)}`;
+}
+
+export interface Vehicle extends BatteryStateMetadata {
   id: string;
   name: string;
   model: string;
   battery_capacity_kwh: number;
   baseline_efficiency_wh_km: number;
+  /** Optional for offline demo profiles; backend defaults to 2500 kg and 0.60. */
+  curb_mass_kg?: number;
+  regen_efficiency?: number;
+  /** Reported operating history; null when the vehicle has no reported history. */
+  cycle_count?: number | null;
+  avg_dod_pct?: number | null;
+  fast_charge_share_pct?: number | null;
+  thermal_stress_index?: number | null;
+  /** Derived history stress assessment; absent for offline demo profiles. */
+  battery_history?: BatteryHistory;
+  current_soc: number;
+  current_soh: number;
+  status: VehicleStatus;
+}
+
+export interface VehicleCreate {
+  id: string;
+  name: string;
+  model: string;
+  battery_capacity_kwh: number;
+  baseline_efficiency_wh_km: number;
+  curb_mass_kg?: number;
+  regen_efficiency?: number;
+  cycle_count?: number | null;
+  avg_dod_pct?: number | null;
+  fast_charge_share_pct?: number | null;
+  thermal_stress_index?: number | null;
+  current_soc: number;
+  current_soh: number;
+  status?: VehicleStatus;
+}
+
+export interface VehicleUpdate {
+  name?: string;
+  model?: string;
+  battery_capacity_kwh?: number;
+  baseline_efficiency_wh_km?: number;
+  curb_mass_kg?: number;
+  regen_efficiency?: number;
+  cycle_count?: number | null;
+  avg_dod_pct?: number | null;
+  fast_charge_share_pct?: number | null;
+  thermal_stress_index?: number | null;
+  current_soc?: number;
+  current_soh?: number;
+  status?: string;
+}
+
+export interface VehicleHistoryEntry {
+  timestamp: string;
   current_soc: number;
   current_soh: number;
   status: VehicleStatus;
@@ -58,15 +140,38 @@ export interface TelemetryResponse {
   data?: TelemetryEvent | null;
 }
 
+export interface BatchTelemetryRequest {
+  events: TelemetryEvent[];
+}
+
+export interface BatchTelemetryResult {
+  vehicle_id: string;
+  success: boolean;
+  message: string;
+}
+
+export interface BatchTelemetryResponse {
+  results: BatchTelemetryResult[];
+}
+
+export interface FleetTelemetryResponse {
+  success: boolean;
+  message: string;
+  data: Record<string, TelemetryEvent>;
+}
+
 export type HvacMode = "OFF" | "LOW" | "MEDIUM" | "HIGH";
 export type DrivingStyle = "ECO" | "NORMAL" | "AGGRESSIVE";
 export type RegenLevel = "OFF" | "LOW" | "MEDIUM" | "HIGH";
+export type RoadType = "URBAN" | "HIGHWAY" | "MIXED";
 export type RiskLevel = "SAFE" | "CAUTION" | "NOT_RECOMMENDED";
 
 export interface SimulationRequest {
   vehicle_id: string;
   route_distance_km: number;
   elevation_gain_m?: number;
+  elevation_loss_m?: number;
+  road_type?: RoadType;
   ambient_temp_c?: number;
   payload_kg?: number;
   hvac_mode?: HvacMode;
@@ -75,13 +180,73 @@ export interface SimulationRequest {
   reserve_soc_target_pct?: number;
 }
 
-export interface SimulationResponse {
+export interface BatchSimulationRequest extends Omit<SimulationRequest, "vehicle_id"> {
+  vehicle_ids?: string[] | null;
+}
+
+export interface BatchSimulationResult {
   vehicle_id: string;
+  response?: SimulationResponse | null;
+  error?: string | null;
+}
+
+export interface BatchSimulationResponse {
+  results: BatchSimulationResult[];
+}
+
+/** Specifications captured from the vehicle used by an assessment. */
+export type SimulationVehicleProfile = Required<Pick<Vehicle,
+  | "battery_capacity_kwh"
+  | "baseline_efficiency_wh_km"
+  | "curb_mass_kg"
+  | "regen_efficiency"
+  | "cycle_count"
+  | "avg_dod_pct"
+  | "fast_charge_share_pct"
+  | "thermal_stress_index"
+>>;
+
+/** Derived operational-history stress assessment. */
+export interface BatteryHistory {
+  /** 0-100 history stress score; null when the vehicle reports no operating history. */
+  stress_score: number | null;
+  stress_class: "NORMAL" | "ELEVATED" | "HIGH" | null;
+  /** Multiplier applied to the SOH-adjusted usable capacity. */
+  capacity_factor: number;
+}
+
+export interface SimulationResponse extends BatteryStateMetadata {
+  vehicle_id: string;
+  vehicle_profile: SimulationVehicleProfile;
+  starting_soc_pct: number;
+  starting_soh_pct: number;
+  /** Backend history overlay; offline demo estimates may omit it. */
+  battery_history?: BatteryHistory;
   usable_battery_capacity_kwh: number;
   estimated_energy_consumption_kwh: number;
+  /** Backend energy breakdown; offline demo estimates may omit it. */
+  propulsion_energy_kwh?: number;
+  hvac_energy_kwh?: number;
+  climb_energy_kwh?: number;
+  recovered_regen_energy_kwh?: number;
   projected_arrival_soc_pct: number;
   remaining_range_km: number;
   risk_level: RiskLevel;
   confidence_score_pct: number;
   recommendations: string[];
+  /** Confidence band; null on runs saved before it existed, absent from offline estimates. */
+  uncertainty_pct?: number | null;
+  predicted_range_km?: number | null;
+  predicted_range_low_km?: number | null;
+  predicted_range_high_km?: number | null;
+  arrival_soc_low_pct?: number | null;
+  arrival_soc_high_pct?: number | null;
+}
+
+/** A saved backend assessment; `timestamp` is the server UTC save time. */
+export interface SimulationRecord {
+  id: string;
+  timestamp: string;
+  request: SimulationRequest;
+  response: SimulationResponse;
 }

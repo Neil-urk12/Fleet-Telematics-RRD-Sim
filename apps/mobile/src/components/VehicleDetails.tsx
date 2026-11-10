@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { formatBatteryState } from "@fleet/api-client";
 import type { Vehicle } from "@fleet/api-client";
 import { colors } from "../constants/theme";
 
@@ -21,6 +22,7 @@ export const VehicleDetails: React.FC<VehicleDetailsProps> = ({
       <Text style={styles.detailRow}>State of Health: {vehicle.current_soh}%</Text>
       <Text style={styles.detailRow}>Efficiency: {vehicle.baseline_efficiency_wh_km} Wh/km</Text>
       <Text style={styles.detailRow}>Status: {vehicle.status}</Text>
+      <Text style={styles.detailRow}>{formatBatteryState(vehicle)}</Text>
 
       <TouchableOpacity
         style={styles.simulateButton}

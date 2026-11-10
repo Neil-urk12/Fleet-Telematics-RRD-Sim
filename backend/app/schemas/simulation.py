@@ -2,15 +2,25 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.vehicle import BatteryHistory, BatteryStateSource
+
+RoadType = Literal["URBAN", "HIGHWAY", "MIXED"]
 
 
 class SimulationRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_id: str = Field(..., description="Selected vehicle ID")
     route_distance_km: float = Field(..., gt=0, description="Total route distance in km")
     elevation_gain_m: float = Field(
         default=0.0, ge=0, description="Total elevation climb in meters"
     )
+    elevation_loss_m: float = Field(
+        default=0.0, ge=0, allow_inf_nan=False, description="Total elevation descent in meters"
+    )
+    road_type: RoadType = Field(default="MIXED")
     ambient_temp_c: float = Field(default=25.0, description="Ambient temperature in °C")
     payload_kg: float = Field(default=0.0, ge=0, description="Cargo/passenger payload in kg")
     hvac_mode: Literal["OFF", "LOW", "MEDIUM", "HIGH"] = Field(default="MEDIUM")
@@ -21,18 +31,50 @@ class SimulationRequest(BaseModel):
     )
 
 
+class SimulationVehicleProfile(BaseModel):
+    """Vehicle specifications actually used by an assessment."""
+
+    battery_capacity_kwh: float
+    baseline_efficiency_wh_km: float
+    curb_mass_kg: float
+    regen_efficiency: float
+    cycle_count: int | None = None
+    avg_dod_pct: float | None = None
+    fast_charge_share_pct: float | None = None
+    thermal_stress_index: float | None = None
+
+
 class SimulationResponse(BaseModel):
     vehicle_id: str
+    vehicle_profile: SimulationVehicleProfile
+    starting_soc_pct: float
+    starting_soh_pct: float
+    state_source: BatteryStateSource
+    state_timestamp: datetime | None
+    battery_history: BatteryHistory
     usable_battery_capacity_kwh: float
     estimated_energy_consumption_kwh: float
+    propulsion_energy_kwh: float
+    hvac_energy_kwh: float
+    climb_energy_kwh: float
+    recovered_regen_energy_kwh: float
     projected_arrival_soc_pct: float
     remaining_range_km: float
     risk_level: Literal["SAFE", "CAUTION", "NOT_RECOMMENDED"]
     confidence_score_pct: float
     recommendations: list[str]
+    # Confidence band; null on runs saved before it existed.
+    uncertainty_pct: float | None = None
+    predicted_range_km: float | None = None
+    predicted_range_low_km: float | None = None
+    predicted_range_high_km: float | None = None
+    arrival_soc_low_pct: float | None = None
+    arrival_soc_high_pct: float | None = None
+
 
 class SimulationRecord(BaseModel):
     """A stored simulation run — request + result, for history lookups."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     request: SimulationRequest
@@ -41,11 +83,16 @@ class SimulationRecord(BaseModel):
 
 class BatchSimulationRequest(BaseModel):
     """Run the same route/conditions against multiple vehicles (or the whole fleet)."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_ids: list[str] | None = Field(
         default=None, description="Vehicles to evaluate; omit to run against the entire fleet"
     )
     route_distance_km: float = Field(..., gt=0)
     elevation_gain_m: float = Field(default=0.0, ge=0)
+    elevation_loss_m: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    road_type: RoadType = Field(default="MIXED")
     ambient_temp_c: float = Field(default=25.0)
     payload_kg: float = Field(default=0.0, ge=0)
     hvac_mode: Literal["OFF", "LOW", "MEDIUM", "HIGH"] = Field(default="MEDIUM")
@@ -66,6 +113,7 @@ class BatchSimulationResponse(BaseModel):
 
 class SimulationConfig(BaseModel):
     """One named configuration to evaluate in a comparison run."""
+
     label: str = Field(..., description="Display label for this config, e.g. 'Eco + AC off'")
     hvac_mode: Literal["OFF", "LOW", "MEDIUM", "HIGH"] = Field(default="MEDIUM")
     driving_style: Literal["ECO", "NORMAL", "AGGRESSIVE"] = Field(default="NORMAL")
@@ -73,9 +121,13 @@ class SimulationConfig(BaseModel):
 
 
 class CompareSimulationRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_id: str = Field(..., description="Selected vehicle ID")
     route_distance_km: float = Field(..., gt=0)
     elevation_gain_m: float = Field(default=0.0, ge=0)
+    elevation_loss_m: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    road_type: RoadType = Field(default="MIXED")
     ambient_temp_c: float = Field(default=25.0)
     payload_kg: float = Field(default=0.0, ge=0)
     reserve_soc_target_pct: float = Field(default=15.0, ge=0, le=50)

@@ -12,8 +12,9 @@
   --border-glow: rgba(0, 194, 255, 0.15);
 
   --text-primary: #e2e8f0;
-  --text-secondary: #7a8ba6;
-  --text-muted: #4a5568;
+  /* Both pass WCAG AA (4.5:1) on --bg-panel. */
+  --text-secondary: #9aa8bd;
+  --text-muted: #7f8a9c;
   --accent-cyan: #00c2ff;
   --accent-green: #10b981;
   --accent-red: #ef4444;

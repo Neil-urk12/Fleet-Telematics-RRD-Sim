@@ -1,35 +1,54 @@
 import './App.css';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect, useRef } from 'react';
 import { useFleetData } from './hooks/useFleetData';
-import { Header } from './components/Header';
+import { Sidebar, PAGES } from './components/Sidebar';
+import type { PageId } from './components/Sidebar';
+import { FleetOnboarding, FleetSummary, StatusBreakdown } from './components/FleetSummary';
 import { FleetPanel } from './components/FleetPanel';
-import { ControlsBar, type DrivingStyle, type HvacMode, type RegenLevel } from './components/ControlsBar';
+import { VehicleActions, VehicleForm } from './components/VehicleForm';
+import { ControlsBar } from './components/ControlsBar';
+import { RouteInputs } from './components/RouteInputs';
+import type { RoutePreset } from './components/RouteInputs';
+import { SimulationResult } from './components/SimulationResult';
+import { FleetComparison } from './components/FleetComparison';
+import { AssessmentHistory } from './components/AssessmentHistory';
+import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
+import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
 import { ElevationChart } from './components/ElevationChart';
 import { ThermalMap } from './components/ThermalMap';
 import { BatteryHealthChart } from './components/BatteryHealthChart';
 import { RegenBrakingPanel } from './components/RegenBrakingPanel';
 import { ChargingPanel } from './components/ChargingPanel';
+import { ELEVATION_PROFILE, ROUTE_DISTANCE_KM, ROUTE_ELEVATION } from './routeData';
+import { GaragePlaceholder } from './components/garage/GarageLoading';
 
-// ── Static route data (Portland → Bend, GT-6 Corridor) ─────────────────
-const TOTAL_DISTANCE = 129.4;
+// three.js is large; load the garage only when someone opens it.
+const GaragePage = lazy(() => import('./components/garage/GaragePage').then(m => ({ default: m.GaragePage })));
 
-const ELEVATION_DATA = [
-    { distance: 0,     elevation: 15 },
-    { distance: 10,    elevation: 45 },
-    { distance: 20,    elevation: 220 },
-    { distance: 30,    elevation: 850 },
-    { distance: 40,    elevation: 1260 },
-    { distance: 50,    elevation: 1490 }, // Summit (Govt Camp)
-    { distance: 60,    elevation: 1180 }, // Descent
-    { distance: 70,    elevation: 720 },  // Plateau
-    { distance: 80,    elevation: 480 },
-    { distance: 90,    elevation: 320 },
-    { distance: 100,   elevation: 260 },
-    { distance: 110,   elevation: 210 },
-    { distance: 120,   elevation: 190 },
-    { distance: 129.4, elevation: 182 },
+// Climb up to the route's highest point (Baguio, at the top of Marcos Highway)
+const SUMMIT_FRACTION = ELEVATION_PROFILE.reduce((top, p) => (p.elevation > top.elevation ? p : top)).distance / ROUTE_DISTANCE_KM;
+
+// Example trips that fill the route fields; only Manila → Baguio matches the map.
+const ROUTE_PRESETS: RoutePreset[] = [
+    { label: 'Manila → Baguio (Marcos Highway)', distanceKm: ROUTE_DISTANCE_KM, gainM: ROUTE_ELEVATION.gain, lossM: ROUTE_ELEVATION.loss, roadType: 'MIXED' },
+    { label: 'City deliveries', distanceKm: 60, gainM: 120, lossM: 120, roadType: 'URBAN' },
+    { label: 'Flat highway run', distanceKm: 200, gainM: 150, lossM: 150, roadType: 'HIGHWAY' },
 ];
+
+const PAGE_DESCRIPTIONS: Record<PageId, string> = {
+    dashboard: 'Current battery state, status and positions across the fleet.',
+    vehicles: 'Register vehicles and browse the fleet.',
+    planner: 'Check whether a vehicle can finish a trip with its reserve intact.',
+    route: 'Manila → Baguio example route via Marcos Highway, elevation profile and sample charging stops.',
+    battery: 'Illustrative pack temperature, health history and regen estimates.',
+    garage: 'Browse the fleet in 3D and register new vehicles.',
+};
+
+function readPage(): PageId {
+    const id = window.location.hash.replace(/^#\/?/, '');
+    return PAGES.find(p => p.id === id)?.id ?? 'dashboard';
+}
 
 // Helper to compute physics-informed SOC curve along the route
 function buildDynamicSocData(
@@ -47,10 +66,10 @@ function buildDynamicSocData(
     const payloadFactor = 1 + (payloadKg / 1000) * 0.15;
 
     let cumulativeKwhUsed = 0;
-    let prevElevation = ELEVATION_DATA[0].elevation;
+    let prevElevation = ELEVATION_PROFILE[0].elevation;
     let prevDistance = 0;
 
-    return ELEVATION_DATA.map(({ distance, elevation }) => {
+    return ELEVATION_PROFILE.map(({ distance, elevation }) => {
         const segDistanceKm = distance - prevDistance;
         const deltaElevM = elevation - prevElevation;
 
@@ -81,8 +100,8 @@ function buildDynamicSocData(
 
 function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progressFraction: number): number[][] {
     const loadBonus = drivingStyle === 'AGGRESSIVE' ? 3.5 : drivingStyle === 'ECO' ? -1.0 : 0;
-    // Extra heat near summit climb (progress ~ 0.35 to 0.45)
-    const climbHeat = progressFraction > 0.25 && progressFraction < 0.48 ? 2.8 : 0;
+    // Extra heat on the climb up to the summit
+    const climbHeat = progressFraction > 0 && progressFraction < SUMMIT_FRACTION ? 2.8 : 0;
     const effectiveBase = baseTempC + loadBonus + climbHeat;
 
     return Array.from({ length: 4 }, (_, r) =>
@@ -98,9 +117,14 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, simulation, loading, error, isSimulating, runSimulation } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, getSimulationHistory, historyVersion, createVehicle, updateVehicle, deleteVehicle } = useFleetData();
 
-    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>('EV-001');
+    const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+    const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
+        ? requestedVehicleId : vehicles[0]?.id ?? null;
+    // Vehicles page: the vehicle loaded into the form; it drops out automatically if deleted.
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const editingVehicle = vehicles.find(vehicle => vehicle.id === editingId) ?? null;
     const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
 
     // Playback and vehicle controls
@@ -110,7 +134,39 @@ function App() {
     const [drivingStyle, setDrivingStyle] = useState<DrivingStyle>('NORMAL');
     const [hvacMode, setHvacMode] = useState<HvacMode>('LOW');
     const [regenLevel, setRegenLevel] = useState<RegenLevel>('MEDIUM');
-    const [payload, setPayload] = useState(450);
+    // Hash routing (#/planner) keeps deep links and the back button working without a router dependency.
+    const [page, setPage] = useState<PageId>(readPage);
+    const headingRef = useRef<HTMLHeadingElement>(null);
+    useEffect(() => {
+        const onHashChange = () => {
+            setPage(readPage());
+            headingRef.current?.focus(); // announce the new page to keyboard/screen-reader users
+        };
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
+    }, []);
+    // The preview only animates where it is visible, so other pages don't re-render every frame.
+    const isAnimating = isRunning && (page === 'route' || page === 'battery');
+    const [routeValues, setRouteValues] = useState<SimulationNumericDraft>({
+        route_distance_km: String(ROUTE_DISTANCE_KM),
+        elevation_gain_m: String(ROUTE_ELEVATION.gain),
+        elevation_loss_m: String(ROUTE_ELEVATION.loss),
+        ambient_temp_c: '31',
+        payload_kg: '450',
+        reserve_soc_target_pct: '15',
+    });
+    const [roadType, setRoadType] = useState<RoadType>('MIXED');
+    const { parameters } = parseSimulationInputs(routeValues);
+    const payload = Number.isFinite(Number(routeValues.payload_kg))
+        ? Math.max(0, Number(routeValues.payload_kg)) : 0;
+    const currentRequest = parameters && selectedVehicleId ? {
+        ...parameters,
+        vehicle_id: selectedVehicleId,
+        road_type: roadType,
+        driving_style: drivingStyle,
+        hvac_mode: hvacMode,
+        regen_level: regenLevel,
+    } : null;
 
     const lastTimeRef = useRef<number>(performance.now());
 
@@ -122,7 +178,7 @@ function App() {
             const dt = (now - lastTimeRef.current) / 1000;
             lastTimeRef.current = now;
 
-            if (isRunning) {
+            if (isAnimating) {
                 setProgressFraction(prev => {
                     // Full route takes ~60s at 1x speed
                     const delta = (dt * speed) / 60;
@@ -138,12 +194,15 @@ function App() {
         animFrameId = requestAnimationFrame(loop);
 
         return () => cancelAnimationFrame(animFrameId);
-    }, [isRunning, speed]);
+    }, [isAnimating, speed]);
 
     // ── Keyboard shortcuts ────────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLInputElement) return;
+            if (page === 'garage') return; // the garage owns Escape / arrows / number keys
+            if (e.target instanceof HTMLElement &&
+                (e.target.matches('input, select, textarea, button, [role="button"]') || e.target.isContentEditable ||
+                    e.target.closest('.leaflet-container'))) return; // the focused map owns arrows/+/- for panning and zoom
             if (e.code === 'Space') {
                 e.preventDefault();
                 setIsRunning(r => !r);
@@ -161,7 +220,7 @@ function App() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [vehicles]);
+    }, [vehicles, page]);
 
     const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId) ?? vehicles[0];
     const activeVehicle = selectedVehicle ?? {
@@ -173,8 +232,11 @@ function App() {
         current_soc: 82.4,
         current_soh: 96.1,
         status: 'IN_USE',
+        state_source: 'vehicle_defaults' as const,
+        state_timestamp: null,
     };
     const selectedTelemetry = selectedVehicleId ? telemetry[selectedVehicleId] : null;
+    const assessmentOutdated = assessment ? isAssessmentOutdated(assessment, currentRequest, selectedVehicle) : false;
 
     // Dynamically calculate State of Charge curve for the selected vehicle
     const socData = useMemo(() => {
@@ -197,115 +259,282 @@ function App() {
     const allTemps = thermalGrid.flat();
     const maxTemp = Math.max(...allTemps);
     const avgTemp = allTemps.reduce((s, t) => s + t, 0) / allTemps.length;
-    const avgSoh = vehicles.length > 0
-        ? vehicles.reduce((s, v) => s + v.current_soh, 0) / vehicles.length
-        : 0;
 
     // ── Delegate simulation to backend via the hook ────────────────────
-    const handleRunSimulation = (vehicleId: string) => {
+    const handleRunSimulation = (parameters: SimulationNumericParameters & { road_type: RoadType }) => {
+        if (!selectedVehicleId || isSimulating) return;
         runSimulation({
-            vehicle_id: vehicleId,
-            route_distance_km: TOTAL_DISTANCE,
-            elevation_gain_m: 720,
-            ambient_temp_c: selectedTelemetry?.ambient_temp_c ?? 22,
-            payload_kg: payload,
+            ...parameters,
+            vehicle_id: selectedVehicleId,
             driving_style: drivingStyle,
             hvac_mode: hvacMode,
             regen_level: regenLevel,
         });
     };
 
+    // The fleet starts empty; planner, route and battery need a vehicle to show anything real.
+    // Vehicles, dashboard and garage render their own empty states.
+    const content = !loading && vehicles.length === 0 && page !== 'vehicles' && page !== 'dashboard' && page !== 'garage'
+        ? 'empty' : page;
+    const fleetEmpty = !loading && vehicles.length === 0;
+    const openGarage = () => { window.location.hash = '#/garage'; };
+
+    const vehiclePicker = (
+        <label className="page-vehicle-picker">
+            <span>Vehicle</span>
+            <select value={selectedVehicleId ?? ''} onChange={e => setSelectedVehicleId(e.target.value)}>
+                {vehicles.map(v => <option key={v.id} value={v.id}>{v.id} · {v.model}</option>)}
+            </select>
+        </label>
+    );
+
+    const mapPanel = (
+        <MapPanel
+            vehicles={vehicles}
+            telemetry={telemetry}
+            dataStatus={dataStatus}
+            selectedVehicleId={selectedVehicleId}
+            selectedStationId={selectedStationId}
+            progressFraction={progressFraction}
+            onSelectVehicle={setSelectedVehicleId}
+            onSelectStation={setSelectedStationId}
+            onProgressChange={setProgressFraction}
+        />
+    );
+
+    const assessmentHistory = selectedVehicleId && (
+        <AssessmentHistory
+            vehicleId={selectedVehicleId}
+            refreshKey={historyVersion}
+            loadHistory={getSimulationHistory}
+        />
+    );
+
     return (
-        <div className="dashboard">
-            {/* ── Backend status banners ────────────────────────────────── */}
-            {loading && (
-                <div className="api-banner api-banner--loading">
-                    Connecting to fleet backend…
-                </div>
-            )}
-            {!loading && error && (
-                <div className="api-banner api-banner--error">
-                    ⚠ Backend unreachable — showing last known data. ({error})
-                </div>
-            )}
+        <div className="app-shell">
+            <Sidebar page={page} dataStatus={dataStatus} lastFetchedAt={lastFetchedAt} />
 
-            <Header
-                fleetCount={vehicles.length}
-                routeDistance={TOTAL_DISTANCE}
-                avgBattery={67.48}
-                batteryHealth={Math.round(avgSoh * 10) / 10}
-            />
+            <main className="page">
+                <header className="page-header">
+                    <div>
+                        <h1 ref={headingRef} tabIndex={-1}>{PAGES.find(p => p.id === page)?.label}</h1>
+                        <p>{PAGE_DESCRIPTIONS[page]}</p>
+                    </div>
+                    {(content === 'route' || content === 'battery') && vehiclePicker}
+                </header>
 
-            <ControlsBar
-                isRunning={isRunning}
-                onToggleRunning={() => setIsRunning(r => !r)}
-                speed={speed}
-                onSpeedChange={setSpeed}
-                onReset={() => setProgressFraction(0)}
-                drivingStyle={drivingStyle}
-                onDrivingStyleChange={setDrivingStyle}
-                hvacMode={hvacMode}
-                onHvacModeChange={setHvacMode}
-                regenLevel={regenLevel}
-                onRegenLevelChange={setRegenLevel}
-                payload={payload}
-                onPayloadChange={setPayload}
-                progressFraction={progressFraction}
-                onProgressChange={setProgressFraction}
-                selectedVehicleId={selectedVehicleId}
-                onRunSimulation={handleRunSimulation}
-                isSimulating={isSimulating}
-            />
+                {/* ── Backend status banners ────────────────────────────────── */}
+                {loading && (
+                    <div className="api-banner api-banner--loading">
+                        Connecting to fleet backend — showing demo data…
+                    </div>
+                )}
+                {!loading && error && (
+                    <div className="api-banner api-banner--error">
+                        {dataStatus === 'demo' ? 'Offline demo data' : 'Connection lost — showing cached fleet data'}. ({error})
+                    </div>
+                )}
 
-            <div className="main-content">
-                <FleetPanel
-                    vehicles={vehicles}
-                    selectedId={selectedVehicleId}
-                    onSelect={setSelectedVehicleId}
-                />
+                {content === 'empty' && (
+                    <section className="empty-state" aria-labelledby="empty-title">
+                        <h2 id="empty-title">No vehicles yet</h2>
+                        <p>Add your first vehicle to see fleet data, plan trips and view battery details.</p>
+                        <a className="simulate-btn" href="#/vehicles">Add a vehicle</a>
+                    </section>
+                )}
 
-                <MapPanel
-                    vehicles={vehicles}
-                    selectedVehicleId={selectedVehicleId}
-                    progressFraction={progressFraction}
-                    onSelectVehicle={setSelectedVehicleId}
-                    onSelectStation={setSelectedStationId}
-                />
+                {content === 'vehicles' && (
+                    <div className="page-grid page-grid--vehicles">
+                        {editingVehicle ? (
+                            <VehicleForm
+                                key={editingVehicle.id}
+                                vehicles={vehicles}
+                                canSubmit={dataStatus === 'live'}
+                                editing={editingVehicle}
+                                onUpdate={updateVehicle}
+                                onStopEditing={() => setEditingId(null)}
+                            />
+                        ) : (
+                            <section className="empty-state" aria-labelledby="garage-cta-title">
+                                <h2 id="garage-cta-title">Fleet garage</h2>
+                                <p>
+                                    {vehicles.length === 0
+                                        ? 'The garage is empty. Open it to register your first vehicle.'
+                                        : 'Add new vehicles and look over the fleet in 3D.'}
+                                </p>
+                                <button
+                                    type="button"
+                                    className="simulate-btn"
+                                    disabled={vehicles.length === 0 && dataStatus !== 'live'}
+                                    onClick={openGarage}
+                                >
+                                    Open garage
+                                </button>
+                                {dataStatus !== 'live' && (
+                                    <span className="route-field-hint">Connect to the fleet backend to add vehicles.</span>
+                                )}
+                            </section>
+                        )}
+                        <div className="vehicles-side">
+                            {selectedVehicleId && selectedVehicle && (
+                                <VehicleActions
+                                    key={selectedVehicleId}
+                                    vehicle={selectedVehicle}
+                                    canSubmit={dataStatus === 'live'}
+                                    isEditing={editingId === selectedVehicleId}
+                                    onEdit={() => setEditingId(selectedVehicleId)}
+                                    onDelete={deleteVehicle}
+                                />
+                            )}
+                            <FleetPanel
+                                vehicles={vehicles}
+                                selectedId={selectedVehicleId}
+                                onSelect={setSelectedVehicleId}
+                            />
+                        </div>
+                    </div>
+                )}
 
-                <ElevationChart
-                    elevationData={ELEVATION_DATA}
-                    socData={socData}
-                    totalDistance={TOTAL_DISTANCE}
-                    progressFraction={progressFraction}
-                />
+                {/* The 3D scene is built from the fleet on mount, so wait for the first fetch. */}
+                {content === 'garage' && (loading ? <GaragePlaceholder /> : (
+                    <Suspense fallback={<GaragePlaceholder />}>
+                        <GaragePage
+                            vehicles={vehicles}
+                            selectedId={selectedVehicleId}
+                            onSelect={setSelectedVehicleId}
+                            onCreate={dataStatus === 'live' ? createVehicle : undefined}
+                        />
+                    </Suspense>
+                ))}
 
-                <ThermalMap
-                    cellTemps={thermalGrid}
-                    maxTemp={maxTemp}
-                    avgTemp={avgTemp}
-                    packHealthPct={activeVehicle.current_soh}
-                />
-            </div>
+                {content === 'dashboard' && fleetEmpty && <>
+                    <FleetSummary vehicles={vehicles} telemetry={telemetry} />
+                    <div className="page-grid page-grid--dashboard-empty">
+                        <div className="area-map">{mapPanel}</div>
+                        <FleetOnboarding
+                            canAdd={dataStatus === 'live'}
+                            onOpenGarage={openGarage}
+                        />
+                    </div>
+                </>}
 
-            <div className="bottom-row">
-                <BatteryHealthChart
-                    vehicles={vehicles}
-                    selectedVehicleId={selectedVehicleId}
-                />
-                <RegenBrakingPanel
-                    telemetry={telemetry}
-                    vehicles={vehicles}
-                    selectedVehicleId={selectedVehicleId}
-                    regenLevel={regenLevel}
-                />
-                <ChargingPanel
-                    vehicles={vehicles}
-                    simulation={simulation}
-                    selectedVehicleId={selectedVehicleId}
-                    selectedStationId={selectedStationId}
-                    onSelectStation={setSelectedStationId}
-                />
-            </div>
+                {content === 'dashboard' && !fleetEmpty && <>
+                    <FleetSummary vehicles={vehicles} telemetry={telemetry} />
+                    <div className="page-grid page-grid--dashboard">
+                        <div className="area-map">{mapPanel}</div>
+                        <FleetPanel
+                            vehicles={vehicles}
+                            selectedId={selectedVehicleId}
+                            onSelect={setSelectedVehicleId}
+                        />
+                        <StatusBreakdown vehicles={vehicles} />
+                        <div className="panel area-history">{assessmentHistory}</div>
+                    </div>
+                </>}
+
+                {content === 'planner' && <>
+                    {simulationError && (
+                        <div className="api-banner api-banner--error" role="alert">
+                            Simulation unavailable: {simulationError}
+                        </div>
+                    )}
+                    <div className="page-card">
+                        <RouteInputs
+                            vehicles={vehicles}
+                            selectedVehicleId={selectedVehicleId}
+                            onVehicleChange={setSelectedVehicleId}
+                            values={routeValues}
+                            roadType={roadType}
+                            presets={ROUTE_PRESETS}
+                            onValuesChange={setRouteValues}
+                            onRoadTypeChange={setRoadType}
+                            drivingStyle={drivingStyle}
+                            onDrivingStyleChange={setDrivingStyle}
+                            hvacMode={hvacMode}
+                            onHvacModeChange={setHvacMode}
+                            regenLevel={regenLevel}
+                            onRegenLevelChange={setRegenLevel}
+                            isSimulating={isSimulating}
+                            onSubmit={handleRunSimulation}
+                        />
+                    </div>
+                    {assessment && (
+                        <SimulationResult
+                            assessment={assessment}
+                            isOutdated={assessmentOutdated}
+                        >
+                            <FleetComparison
+                                assessment={assessment}
+                                currentRequest={currentRequest}
+                                vehicles={vehicles}
+                                isOutdated={assessmentOutdated}
+                                isConnected={dataStatus === 'live'}
+                                readingTime={readingTime}
+                                runComparison={runBatchSimulation}
+                                onSelectAndAssess={vehicleId => {
+                                    if (isSimulating || !currentRequest) return;
+                                    setSelectedVehicleId(vehicleId);
+                                    void runSimulation({ ...currentRequest, vehicle_id: vehicleId });
+                                }}
+                            />
+                        </SimulationResult>
+                    )}
+                    <div className="page-card">{assessmentHistory}</div>
+                </>}
+
+                {content === 'route' && <>
+                    <div className="page-card">
+                        <ControlsBar
+                            isRunning={isRunning}
+                            onToggleRunning={() => setIsRunning(r => !r)}
+                            speed={speed}
+                            onSpeedChange={setSpeed}
+                            onReset={() => setProgressFraction(0)}
+                            progressFraction={progressFraction}
+                            onProgressChange={setProgressFraction}
+                            routeDistanceKm={ROUTE_DISTANCE_KM}
+                        />
+                    </div>
+                    <div className="page-grid page-grid--route">
+                        {mapPanel}
+                        <ElevationChart
+                            elevationData={ELEVATION_PROFILE}
+                            socData={socData}
+                            totalDistance={ROUTE_DISTANCE_KM}
+                            progressFraction={progressFraction}
+                        />
+                        <ChargingPanel
+                            vehicles={vehicles}
+                            selectedVehicleId={selectedVehicleId}
+                            selectedStationId={selectedStationId}
+                            onSelectStation={setSelectedStationId}
+                        />
+                    </div>
+                </>}
+
+                {content === 'battery' && (
+                    <div className="page-grid page-grid--battery">
+                        <ThermalMap
+                            cellTemps={thermalGrid}
+                            maxTemp={maxTemp}
+                            avgTemp={avgTemp}
+                            packHealthPct={activeVehicle.current_soh}
+                            readingLabel={selectedTelemetry
+                                ? `${dataStatus === 'demo' ? 'Demo' : 'Reported'} pack temperature: ${selectedTelemetry.pack_temp_c.toFixed(1)}°C · ${formatReadingAge(selectedTelemetry.timestamp, readingTime)}`
+                                : 'Pack temperature unavailable · Illustrative baseline 31.5°C'}
+                        />
+                        <BatteryHealthChart
+                            vehicles={vehicles}
+                            selectedVehicleId={selectedVehicleId}
+                        />
+                        <RegenBrakingPanel
+                            vehicles={vehicles}
+                            selectedVehicleId={selectedVehicleId}
+                            regenLevel={regenLevel}
+                        />
+                    </div>
+                )}
+            </main>
         </div>
     );
 }

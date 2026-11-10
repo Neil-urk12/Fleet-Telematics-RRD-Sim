@@ -1,8 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { TelemetryEvent } from '@fleet/api-client';
 
 interface RegenBrakingPanelProps {
-    telemetry: Record<string, TelemetryEvent>;
     vehicles: Array<{ id: string }>;
     selectedVehicleId?: string | null;
     regenLevel?: string;
@@ -115,27 +113,28 @@ export function RegenBrakingPanel({
     return (
         <div className="regen-panel" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="panel-header">
-                <h3 className="panel-title">REGENERATIVE BRAKING RECOVERY</h3>
+                <h3 className="panel-title">DEMO REGEN &amp; BRAKING ESTIMATE</h3>
                 <span className="panel-badge" style={{ color: 'var(--accent-green)' }}>
                     ● {efficiency.toFixed(0)}% CAPTURE ({regenLevel})
                 </span>
             </div>
+            <p className="data-note">Illustrative values based on the regen setting. Fleet recovery and brake losses are not measured.</p>
 
             <div className="regen-stats-row">
                 <div className="regen-stat">
-                    <span className="stat-label">FLEET HARVESTED</span>
+                    <span className="stat-label">EXAMPLE RECOVERY</span>
                     <span className="stat-value" style={{ color: 'var(--accent-green)', fontSize: '13px' }}>
                         +{totalRegen.toFixed(1)} kWh
                     </span>
                 </div>
                 <div className="regen-stat">
-                    <span className="stat-label">FRICTION DISSIPATED</span>
+                    <span className="stat-label">EXAMPLE BRAKE LOSS</span>
                     <span className="stat-value" style={{ color: 'var(--accent-red)', fontSize: '13px' }}>
                         -{totalBrake.toFixed(1)} kWh
                     </span>
                 </div>
                 <div className="regen-stat">
-                    <span className="stat-label">RANGE BOOST</span>
+                    <span className="stat-label">EXAMPLE RANGE BOOST</span>
                     <span className="stat-value" style={{ color: 'var(--accent-cyan)', fontSize: '13px' }}>
                         +{(totalRegen * 5.8).toFixed(0)} km
                     </span>

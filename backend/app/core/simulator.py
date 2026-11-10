@@ -1,11 +1,35 @@
-from app.schemas.simulation import SimulationRequest, SimulationResponse
+import math
+
+from app.core.battery_history import assess_battery_history
+from app.schemas.simulation import SimulationRequest, SimulationResponse, SimulationVehicleProfile
 from app.schemas.vehicle import Vehicle
+
+# Illustrative PoC calibration coefficients, not measured OEM performance.
+ROAD_MULTIPLIERS = {"URBAN": 1.05, "HIGHWAY": 1.15, "MIXED": 1.0}
+REGEN_MULTIPLIERS = {"OFF": 0.0, "LOW": 0.35, "MEDIUM": 0.65, "HIGH": 1.0}
+CLIMB_EFFICIENCY = 0.80
+PAYLOAD_MASS_COEFFICIENT = 0.125
+
+# Heuristic route-energy uncertainty (percentage points of net route energy).
+BASE_UNCERTAINTY_PCT = 5.0
+COLD_UNCERTAINTY_PCT = 5.0  # below 0 °C
+HEAT_UNCERTAINTY_PCT = 3.0  # above 35 °C
+AGGRESSIVE_UNCERTAINTY_PCT = 4.0
+URBAN_UNCERTAINTY_PCT = 2.0
+HISTORY_UNCERTAINTY_PCT = {"ELEVATED": 2.0, "HIGH": 4.0}
+LOW_SOH_UNCERTAINTY_PCT = 3.0  # SOH below 80%
+# The uncertainty band is treated as a 90% interval of a normal distribution.
+BAND_Z_SCORE = 1.645
 
 
 def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> SimulationResponse:
     # 1. Battery Degradation & Available Energy Calculation
     soh_factor = vehicle.current_soh / 100.0
     usable_capacity_kwh = vehicle.battery_capacity_kwh * soh_factor
+
+    # Operational-history stress overlay, applied after SOH and before temperature.
+    history = assess_battery_history(vehicle)
+    usable_capacity_kwh *= history.capacity_factor
 
     # Temperature derating factor for battery capacity
     if req.ambient_temp_c < 0:
@@ -18,6 +42,8 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
         temp_capacity_factor = 1.0
 
     effective_usable_kwh = usable_capacity_kwh * temp_capacity_factor
+    if effective_usable_kwh <= 0:
+        raise ValueError("Vehicle has no usable battery capacity; route assessment is unavailable")
     current_energy_kwh = effective_usable_kwh * (vehicle.current_soc / 100.0)
 
     # 2. Consumption Modifiers
@@ -29,19 +55,47 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
     hvac_adders = {"OFF": 0.0, "LOW": 15.0, "MEDIUM": 30.0, "HIGH": 55.0}  # Wh/km
     hvac_adder = hvac_adders.get(req.hvac_mode, 30.0)
 
-    # Payload penalty: ~0.5% consumption increase per 100 kg
-    payload_mult = 1.0 + (req.payload_kg / 100.0) * 0.005
+    # Scale the payload penalty relative to unloaded vehicle mass.
+    # At the legacy 2500 kg default this retains +0.5% per 100 kg.
+    payload_mult = 1.0 + PAYLOAD_MASS_COEFFICIENT * req.payload_kg / vehicle.curb_mass_kg
 
     # Elevation demand (potential energy m*g*h in kWh, assuming ~80% efficiency climbing)
-    # Total mass ~ Vehicle curb mass (e.g. 2500kg) + payload
-    total_mass_kg = 2500.0 + req.payload_kg
-    climb_energy_kwh = (total_mass_kg * 9.81 * req.elevation_gain_m) / (3.6e6 * 0.80)
+    total_mass_kg = vehicle.curb_mass_kg + req.payload_kg
+    climb_energy_kwh = (total_mass_kg * 9.81 * req.elevation_gain_m) / (3.6e6 * CLIMB_EFFICIENCY)
 
     # Base propulsion consumption
-    base_wh_km = (vehicle.baseline_efficiency_wh_km * style_mult * payload_mult) + hvac_adder
+    base_wh_km = (
+        vehicle.baseline_efficiency_wh_km
+        * ROAD_MULTIPLIERS[req.road_type]
+        * style_mult
+        * payload_mult
+    )
     propulsion_energy_kwh = (base_wh_km * req.route_distance_km) / 1000.0
+    hvac_energy_kwh = hvac_adder * req.route_distance_km / 1000.0
 
-    total_consumption_kwh = round(propulsion_energy_kwh + climb_energy_kwh, 2)
+    gross_energy_kwh = propulsion_energy_kwh + hvac_energy_kwh + climb_energy_kwh
+    recovery_per_kg_kwh = (
+        9.81
+        * req.elevation_loss_m
+        / 3.6e6
+        * vehicle.regen_efficiency
+        * REGEN_MULTIPLIERS[req.regen_level]
+    )
+    payload_demand_kwh = (
+        propulsion_energy_kwh
+        - propulsion_energy_kwh / payload_mult
+        + req.payload_kg * 9.81 * req.elevation_gain_m / (3.6e6 * CLIMB_EFFICIENCY)
+    )
+    # Conservative PoC policy: payload recovery can offset its added demand,
+    # but carrying more cargo must never improve arrival SOC or remaining range.
+    payload_recovery_kwh = min(req.payload_kg * recovery_per_kg_kwh, payload_demand_kwh)
+    # Conservative route-average recovery: no net charging is predicted without
+    # segment order, pack headroom, or regen power limits.
+    recovered_regen_kwh = min(
+        gross_energy_kwh,
+        vehicle.curb_mass_kg * recovery_per_kg_kwh + payload_recovery_kwh,
+    )
+    total_consumption_kwh = round(gross_energy_kwh - recovered_regen_kwh, 2)
 
     # 3. Projected Arrival SOC and Remaining Range
     remaining_energy_kwh = current_energy_kwh - total_consumption_kwh
@@ -54,36 +108,87 @@ def calculate_simulation(req: SimulationRequest, vehicle: Vehicle) -> Simulation
         max(0.0, remaining_energy_kwh / max(0.05, average_efficiency_kwh_km)), 1
     )
 
-    # 4. Risk Classification & Decision Support
+    # 4. Confidence Band
+    uncertainty_pct = BASE_UNCERTAINTY_PCT
+    if req.ambient_temp_c < 0:
+        uncertainty_pct += COLD_UNCERTAINTY_PCT
+    elif req.ambient_temp_c > 35:
+        uncertainty_pct += HEAT_UNCERTAINTY_PCT
+    if req.driving_style == "AGGRESSIVE":
+        uncertainty_pct += AGGRESSIVE_UNCERTAINTY_PCT
+    if req.road_type == "URBAN":
+        uncertainty_pct += URBAN_UNCERTAINTY_PCT
+    uncertainty_pct += HISTORY_UNCERTAINTY_PCT.get(history.stress_class or "", 0.0)
+    if vehicle.current_soh < 80:
+        uncertainty_pct += LOW_SOH_UNCERTAINTY_PCT
+    spread = uncertainty_pct / 100.0
+
+    def range_at(rate_kwh_km: float) -> float:
+        return round(max(0.0, current_energy_kwh / max(0.05, rate_kwh_km)), 1)
+
+    def arrival_soc_at(consumption_kwh: float) -> float:
+        return round((current_energy_kwh - consumption_kwh) / effective_usable_kwh * 100.0, 1)
+
+    margin_kwh = remaining_energy_kwh - effective_usable_kwh * req.reserve_soc_target_pct / 100.0
+    sigma_kwh = total_consumption_kwh * spread / BAND_Z_SCORE
+    if sigma_kwh > 0:
+        completion = 0.5 * (1.0 + math.erf(margin_kwh / (sigma_kwh * math.sqrt(2.0))))
+    else:
+        completion = 1.0 if projected_arrival_soc >= req.reserve_soc_target_pct else 0.0
+    confidence_score = round(completion * 100.0, 1)
+
+    # 5. Risk Classification & Decision Support
     recommendations: list[str] = []
     if projected_arrival_soc >= req.reserve_soc_target_pct:
         risk_level = "SAFE"
-        confidence_score = 92.0
-        recommendations.append("Route is safe to proceed under current operational parameters.")
+        recommendations.append("No changes needed. You can drive this trip as planned.")
     elif projected_arrival_soc >= (req.reserve_soc_target_pct / 2.0):
         risk_level = "CAUTION"
-        confidence_score = 75.0
-        recommendations.append("Arrival SOC will fall below target reserve margin.")
+        recommendations.append("You would arrive with less battery than your chosen safety margin.")
         if req.driving_style == "AGGRESSIVE":
-            recommendations.append("Switch driving profile to ECO to conserve battery.")
+            recommendations.append("Drive in Eco mode to save battery.")
         if req.hvac_mode == "HIGH":
-            recommendations.append("Reduce HVAC demand to MEDIUM or LOW.")
-        recommendations.append("Consider a 10-15 minute top-up charge before departure.")
+            recommendations.append("Turn heating/A/C down to Medium or Low.")
+        recommendations.append("Consider a 10-15 minute top-up charge before you leave.")
     else:
         risk_level = "NOT_RECOMMENDED"
-        confidence_score = 88.0
         recommendations.append(
-            "Route cannot be safely completed without en-route or pre-departure charging."
+            "This trip needs a charge, either before you leave or at a stop on the way."
         )
-        recommendations.append("Reassign to a vehicle with higher initial SOC or higher SOH.")
+        recommendations.append("Or choose a vehicle with more charge or a healthier battery.")
 
     return SimulationResponse(
         vehicle_id=vehicle.id,
+        vehicle_profile=SimulationVehicleProfile(
+            battery_capacity_kwh=vehicle.battery_capacity_kwh,
+            baseline_efficiency_wh_km=vehicle.baseline_efficiency_wh_km,
+            curb_mass_kg=vehicle.curb_mass_kg,
+            regen_efficiency=vehicle.regen_efficiency,
+            cycle_count=vehicle.cycle_count,
+            avg_dod_pct=vehicle.avg_dod_pct,
+            fast_charge_share_pct=vehicle.fast_charge_share_pct,
+            thermal_stress_index=vehicle.thermal_stress_index,
+        ),
+        starting_soc_pct=vehicle.current_soc,
+        starting_soh_pct=vehicle.current_soh,
+        state_source=vehicle.state_source,
+        state_timestamp=vehicle.state_timestamp,
+        battery_history=history,
         usable_battery_capacity_kwh=round(effective_usable_kwh, 2),
         estimated_energy_consumption_kwh=total_consumption_kwh,
+        propulsion_energy_kwh=round(propulsion_energy_kwh, 2),
+        hvac_energy_kwh=round(hvac_energy_kwh, 2),
+        climb_energy_kwh=round(climb_energy_kwh, 2),
+        recovered_regen_energy_kwh=round(recovered_regen_kwh, 2),
         projected_arrival_soc_pct=projected_arrival_soc,
         remaining_range_km=remaining_range_km,
         risk_level=risk_level,
         confidence_score_pct=confidence_score,
         recommendations=recommendations,
+        uncertainty_pct=uncertainty_pct,
+        predicted_range_km=range_at(average_efficiency_kwh_km),
+        predicted_range_low_km=range_at(average_efficiency_kwh_km * (1 + spread)),
+        predicted_range_high_km=range_at(average_efficiency_kwh_km * (1 - spread)),
+        arrival_soc_low_pct=arrival_soc_at(total_consumption_kwh * (1 + spread)),
+        arrival_soc_high_pct=arrival_soc_at(total_consumption_kwh * (1 - spread)),
     )

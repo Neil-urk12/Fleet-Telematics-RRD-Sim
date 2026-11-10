@@ -1,4 +1,10 @@
 import type {
+  BatchSimulationRequest,
+  BatchSimulationResponse,
+  BatchTelemetryRequest,
+  BatchTelemetryResponse,
+  FleetTelemetryResponse,
+  SimulationRecord,
   SimulationRequest,
   SimulationResponse,
   TelemetryEvent,
@@ -11,6 +17,16 @@ import type {
 
 export interface FleetApiClientConfig {
   baseUrl: string;
+}
+
+export class FleetApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "FleetApiError";
+    this.status = status;
+  }
 }
 
 export class FleetApiClient {
@@ -44,7 +60,7 @@ export class FleetApiClient {
       } catch {
         // Fall back to status text
       }
-      throw new Error(errorMessage);
+      throw new FleetApiError(res.status, errorMessage);
     }
 
     return res.json();
@@ -82,7 +98,7 @@ export class FleetApiClient {
       } catch {
         // Fall back to status text
       }
-      throw new Error(errorMessage);
+      throw new FleetApiError(res.status, errorMessage);
     }
   }
 
@@ -106,12 +122,39 @@ export class FleetApiClient {
     });
   }
 
+  async ingestBatchTelemetry(payload: BatchTelemetryRequest): Promise<BatchTelemetryResponse> {
+    return this.fetchJson<BatchTelemetryResponse>("/api/telemetry/batch", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getFleetLatestTelemetry(): Promise<FleetTelemetryResponse> {
+    return this.fetchJson<FleetTelemetryResponse>("/api/telemetry/fleet/latest");
+  }
+
+  async getTelemetryHistory(vehicleId: string): Promise<TelemetryEvent[]> {
+    return this.fetchJson<TelemetryEvent[]>(`/api/telemetry/${encodeURIComponent(vehicleId)}/history`);
+  }
+
   // Simulation
   async runSimulation(req: SimulationRequest): Promise<SimulationResponse> {
     return this.fetchJson<SimulationResponse>("/api/simulation/run", {
       method: "POST",
       body: JSON.stringify(req),
     });
+  }
+
+  async runBatchSimulation(req: BatchSimulationRequest): Promise<BatchSimulationResponse> {
+    return this.fetchJson<BatchSimulationResponse>("/api/simulation/batch", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
+  async getSimulationHistory(vehicleId?: string): Promise<SimulationRecord[]> {
+    const query = vehicleId === undefined ? "" : `?vehicle_id=${encodeURIComponent(vehicleId)}`;
+    return this.fetchJson<SimulationRecord[]>(`/api/simulation/history${query}`);
   }
 
   // Health

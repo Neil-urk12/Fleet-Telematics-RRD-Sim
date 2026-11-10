@@ -24,7 +24,6 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
 }) => {
   const [pingStatus, setPingStatus] = useState<"idle" | "testing" | "success" | "fail">("idle");
   const [useMetric, setUseMetric] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [hapticFeedback, setHapticFeedback] = useState(true);
 
   const handleTestPing = async () => {
@@ -66,7 +65,7 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
               styles.statusDot,
               pingStatus === "fail"
                 ? styles.statusDotRed
-                : styles.statusDotGreen,
+                : pingStatus === "success" ? styles.statusDotGreen : { backgroundColor: colors.textMuted },
             ]}
           />
         </View>
@@ -77,8 +76,8 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
         </View>
 
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>FastAPI Engine</Text>
-          <Text style={styles.infoVal}>Uvicorn v0.34 (Port 8000)</Text>
+          <Text style={styles.infoLabel}>Connection Check</Text>
+          <Text style={styles.infoVal}>{pingStatus === "idle" ? "Not checked" : pingStatus === "testing" ? "Checking" : pingStatus === "success" ? "Last check succeeded" : "Last check failed"}</Text>
         </View>
 
         <TouchableOpacity
@@ -106,7 +105,7 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
             {pingStatus === "testing"
               ? "Testing Connection..."
               : pingStatus === "success"
-              ? "Connection Verified (Healthy)"
+              ? "Last Connection Check Succeeded"
               : pingStatus === "fail"
               ? "Connection Failed (Check IP)"
               : "Test API Ping"}
@@ -116,21 +115,21 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
 
       {/* Simulation Engine Specs */}
       <View style={styles.sectionCard}>
-        <Text style={styles.cardTitle}>Physics Engine Specifications</Text>
+        <Text style={styles.cardTitle}>Backend PoC Model Assumptions</Text>
 
         <View style={styles.specItem}>
           <MaterialCommunityIcons name="wind-turbine" size={20} color={colors.accentPrimary} />
           <View style={styles.specTextCol}>
-            <Text style={styles.specName}>Aerodynamic Drag</Text>
-            <Text style={styles.specDesc}>0.5 * rho * Cd * A * v^2 with ambient air density</Text>
+            <Text style={styles.specName}>Propulsion Demand</Text>
+            <Text style={styles.specDesc}>Baseline Wh/km scaled by road type and driving style</Text>
           </View>
         </View>
 
         <View style={styles.specItem}>
           <MaterialCommunityIcons name="tire" size={20} color={colors.accentPrimary} />
           <View style={styles.specTextCol}>
-            <Text style={styles.specName}>Rolling Resistance</Text>
-            <Text style={styles.specDesc}>Crr * mass * g with dynamic cargo payloads</Text>
+            <Text style={styles.specName}>Payload Effect</Text>
+            <Text style={styles.specDesc}>Payload penalty relative to unloaded vehicle mass</Text>
           </View>
         </View>
 
@@ -146,7 +145,7 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
           <MaterialCommunityIcons name="air-conditioner" size={20} color={colors.accentPrimary} />
           <View style={styles.specTextCol}>
             <Text style={styles.specName}>Auxiliary & HVAC Cabin Load</Text>
-            <Text style={styles.specDesc}>Ambient temperature-dependent thermal cycle draw</Text>
+            <Text style={styles.specDesc}>Distance-based HVAC demand; temperature derates usable capacity</Text>
           </View>
         </View>
       </View>
@@ -157,15 +156,9 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
 
         <View style={styles.prefRow}>
           <View>
-            <Text style={styles.prefTitle}>Auto-Refresh Telematics</Text>
-            <Text style={styles.prefDesc}>Poll fleet metrics periodically</Text>
+            <Text style={styles.prefTitle}>Fleet Refresh</Text>
+            <Text style={styles.prefDesc}>Every 5 seconds while active; refreshes on return</Text>
           </View>
-          <Switch
-            value={autoRefresh}
-            onValueChange={setAutoRefresh}
-            trackColor={{ false: colors.border, true: colors.badgeBg }}
-            thumbColor={autoRefresh ? colors.accentPrimary : colors.textMuted}
-          />
         </View>
 
         <View style={styles.prefRow}>

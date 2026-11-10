@@ -1,4 +1,5 @@
 // src/components/FleetPanel.tsx
+import { formatBatteryState } from '@fleet/api-client';
 import type { Vehicle } from '@fleet/api-client';
 import { useState } from 'react';
 
@@ -16,8 +17,8 @@ export function FleetPanel({ vehicles, selectedId, onSelect }: FleetPanelProps) 
     return (
         <aside className="fleet-panel">
             <div className="panel-header">
-                <h2 className="panel-title">FLEET STATUS</h2>
-                <span className="panel-badge">{filteredVehicles.length} / {vehicles.length} ACTIVE</span>
+                <h2 className="panel-title">VEHICLES</h2>
+                <span className="panel-badge">{filteredVehicles.length} OF {vehicles.length} SHOWN</span>
             </div>
             <div className="fleet-search-container">
                 <input
@@ -48,7 +49,7 @@ export function FleetPanel({ vehicles, selectedId, onSelect }: FleetPanelProps) 
                     ))
                 ) : (
                     <div className="fleet-empty-search">
-                        No vehicle found with ID "{searchQuery}"
+                        {vehicles.length === 0 ? 'No vehicles registered yet.' : `No vehicle found with ID "${searchQuery}"`}
                     </div>
                 )}
             </div>
@@ -88,6 +89,7 @@ function VehicleCard({
             </div>
 
             <span className="vehicle-model">{vehicle.model}</span>
+            <span className="vehicle-model">{formatBatteryState(vehicle)}</span>
 
 
             <div className="soc-bar-container">
@@ -108,7 +110,7 @@ function VehicleCard({
     );
 }
 
-function getStatusColor(status: string): string {
+export function getStatusColor(status: string): string {
     switch (status) {
         case 'AVAILABLE': return 'var(--accent-green)';
         case 'CHARGING': return 'var(--accent-cyan)';
