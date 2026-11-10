@@ -11,6 +11,11 @@
     "clean": "pnpm -r exec rm -rf node_modules dist .expo",
     "test:load": "k6 run k6/load-test.js",
     "test:smoke": "k6 run k6/smoke-test.js",
+    "test:stress": "k6 run k6/stress-test.js",
+    "test:spike": "k6 run k6/spike-test.js",
+    "test:soak": "k6 run k6/soak-test.js",
+    "test:telemetry": "k6 run k6/telemetry-load.js",
+    "test:batch-sim": "k6 run k6/batch-simulation-test.js",
     "test:client": "node packages/api-client/check-reading-age.mjs && node packages/api-client/check-fleet-comparison.mjs && node packages/api-client/check-battery-history.mjs && node packages/api-client/check-simulation-history.mjs"
   }
 }
