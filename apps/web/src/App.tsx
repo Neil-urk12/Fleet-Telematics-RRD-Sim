@@ -339,7 +339,7 @@ function App() {
                     <section className="empty-state" aria-labelledby="empty-title">
                         <h2 id="empty-title">No vehicles yet</h2>
                         <p>Add your first vehicle to see fleet data, plan trips and view battery details.</p>
-                        <a className="simulate-btn" href="#/vehicles">Add a vehicle</a>
+                        <a className="simulate-btn" href="#/garage">Add a vehicle</a>
                     </section>
                 )}
 
