@@ -137,11 +137,16 @@ export function GaragePage({ vehicles, selectedId, onSelect, onCreate }: GarageP
         const garage = garageRef.current;
         if (!garage) return; // no 3D: the vehicle sheet still shows it
         busyRef.current = true;
-        await garage.ready;
-        const thumb = garage.add(created); // not inside the updater: React may run updaters late or twice
-        setThumbs(t => [...(t ?? []), thumb]);
-        await garage.select(next); // swaps the preview for the registered car, plate and all
-        busyRef.current = false;
+        try {
+            await garage.ready; // rejects if the 3D load failed; that error is already shown
+            const thumb = garage.add(created); // not inside the updater: React may run updaters late or twice
+            setThumbs(t => [...(t ?? []), thumb]);
+            await garage.select(next); // swaps the preview for the registered car, plate and all
+        } catch (e) {
+            console.error(e); // a failed load is shown (and logged) by the load effect too
+        } finally {
+            busyRef.current = false;
+        }
     };
     const chooseView = (view: GarageView) => {
         garageRef.current?.view(view);
