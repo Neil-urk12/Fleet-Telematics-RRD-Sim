@@ -72,7 +72,7 @@ every listed capability exists in this repository.
   - `app/schemas/` — Pydantic v2 validation and request/response models.
   - `tests/` — standard-library unittest coverage for current state, route energy,
     and the history overlay.
-- `k6/` — smoke/load scripts.
+- `k6/` — smoke, load, stress, spike, soak, telemetry, and batch simulation scripts.
 - `apps/web/vite.config.ts` — `/api` proxy to `http://127.0.0.1:8000`.
 
 ## Commands
@@ -85,7 +85,7 @@ Root (pnpm workspace):
 - `pnpm lint` — oxlint on the web app.
 - `pnpm --filter @fleet/mobile exec tsc --noEmit` — mobile TypeScript check.
 - `pnpm --filter @fleet/mobile android` / `ios` / `web` — targeted Expo startup.
-- `pnpm test:smoke` / `pnpm test:load` — k6 checks (requires k6 and a running backend).
+- `pnpm test:smoke` / `pnpm test:load` / `pnpm test:stress` / `pnpm test:spike` / `pnpm test:soak` / `pnpm test:telemetry` / `pnpm test:batch-sim` — k6 performance checks (requires k6 and a running backend).
 - `pnpm test:client` — standalone shared-client checks (no backend or browser needed).
 - `node apps/web/scripts/build-route-data.mjs` — regenerate `routeData.ts` from public
   OSRM and OpenTopoData services (manual, one-off); `--check [file]` validates it offline.
