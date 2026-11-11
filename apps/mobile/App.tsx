@@ -3,7 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { AppState, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
-import type { SimulationAssessment, SimulationRequest, SimulationResponse, TelemetryEvent, Vehicle } from "@fleet/api-client";
+import type { SimulationAssessment, SimulationRequest, SimulationResponse, TelemetryEvent, Vehicle, VehicleCreate } from "@fleet/api-client";
 
 import { client } from "./src/config/api";
 import { colors } from "./src/constants/theme";
@@ -16,6 +16,7 @@ import {
   MoreScreen,
   BatteryScreen,
   RouteScreen,
+  GarageScreen,
 } from "./src/screens";
 
 const fallbackVehicles: Vehicle[] = [
@@ -245,7 +246,22 @@ export default function App() {
             />
           )}
 
-          {(currentTab === "fleet" || currentTab === "vehicles" || currentTab === "garage") && (
+          {currentTab === "garage" && (
+            <GarageScreen
+              vehicles={vehicles}
+              selectedVehicle={selectedVehicle}
+              dataStatus={dataStatus}
+              onSelectVehicle={setSelectedVehicle}
+              onCreate={dataStatus === "live" ? async (payload: VehicleCreate) => {
+                const created = await client.createVehicle(payload);
+                setVehicles(current => [...current, created]);
+                setSelectedVehicle(created);
+                return created;
+              } : undefined}
+            />
+          )}
+
+          {(currentTab === "fleet" || currentTab === "vehicles") && (
             <FleetScreen
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
