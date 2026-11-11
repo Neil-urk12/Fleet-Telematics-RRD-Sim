@@ -3,7 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { AppState, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
-import type { SimulationAssessment, SimulationRequest, SimulationResponse, Vehicle } from "@fleet/api-client";
+import type { SimulationAssessment, SimulationRequest, SimulationResponse, TelemetryEvent, Vehicle } from "@fleet/api-client";
 
 import { client } from "./src/config/api";
 import { colors } from "./src/constants/theme";
@@ -15,6 +15,7 @@ import {
   AlertsScreen,
   MoreScreen,
   BatteryScreen,
+  RouteScreen,
 } from "./src/screens";
 
 const fallbackVehicles: Vehicle[] = [
@@ -59,6 +60,7 @@ const fallbackVehicles: Vehicle[] = [
 export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>("dashboard");
   const [vehicles, setVehicles] = useState<Vehicle[]>(fallbackVehicles);
+  const [telemetry, setTelemetry] = useState<Record<string, TelemetryEvent>>({});
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(fallbackVehicles[0]);
   const [assessment, setAssessment] = useState<SimulationAssessment | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,8 +79,15 @@ export default function App() {
     fetchingVehicles.current = true;
     if (showLoading) setLoading(true);
     try {
-      const data = await client.getVehicles();
+      const [data, fleetTelemetry] = await Promise.all([
+        client.getVehicles(),
+        client.getFleetLatestTelemetry(),
+      ]);
+      const vehicleIds = new Set(data.map(vehicle => vehicle.id));
       setVehicles(data);
+      setTelemetry(Object.fromEntries(
+        Object.entries(fleetTelemetry.data).filter(([id]) => vehicleIds.has(id))
+      ));
       setSelectedVehicle(previous => data.find(vehicle => vehicle.id === previous?.id) ?? data[0] ?? null);
       hasBackendData.current = true;
       setLastFetchedAt(new Date().toISOString());
@@ -249,7 +258,18 @@ export default function App() {
             />
           )}
 
-          {(currentTab === "simulator" || currentTab === "planner" || currentTab === "route") && (
+          {currentTab === "route" && (
+            <RouteScreen
+              vehicles={vehicles}
+              telemetry={telemetry}
+              dataStatus={dataStatus}
+              selectedVehicle={selectedVehicle}
+              onSelectVehicle={setSelectedVehicle}
+              onNavigateTab={setCurrentTab}
+            />
+          )}
+
+          {(currentTab === "simulator" || currentTab === "planner") && (
             <SimulatorScreen
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
