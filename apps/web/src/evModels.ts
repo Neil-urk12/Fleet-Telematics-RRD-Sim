@@ -1,6 +1,7 @@
 // Known EVs offered when registering a vehicle in the garage. Approximate published
 // figures (usable battery, typical real-world consumption, curb weight); PoC defaults,
-// not OEM-certified values. Truck/van names match the garage's truck body (bodyFor).
+// not OEM-certified values. Each model name must match a silhouette in the garage's MODELS
+// table (components/garage/scene.js); unmatched names get a generic body.
 export interface EvModel {
     model: string;
     battery_capacity_kwh: number;

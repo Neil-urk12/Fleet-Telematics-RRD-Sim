@@ -1,5 +1,6 @@
 export type GarageView = 'hero' | 'side' | 'rear' | 'top';
-export type GarageBody = 'lumen' | 'basalt';
+/** 'lumen' / 'basalt' are the generic bodies for models outside the catalog. */
+export type GarageBody = 'lumen' | 'basalt' | 'sedan' | 'hatch' | 'crossover' | 'pickup' | 'suv' | 'van';
 
 export const BODY_LABEL: Record<GarageBody, string>;
 export function bodyFor(model: string): GarageBody;
