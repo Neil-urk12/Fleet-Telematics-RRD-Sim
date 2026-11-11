@@ -5,7 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
 import type { SimulationAssessment, SimulationRequest, SimulationResponse, TelemetryEvent, Vehicle, VehicleCreate, VehicleUpdate } from "@fleet/api-client";
 
-import { client } from "./src/config/api";
+import { API_URL, client } from "./src/config/api";
 import { colors } from "./src/constants/theme";
 import { BottomNavBar, type TabType } from "./src/navigation";
 import {
@@ -235,12 +235,25 @@ export default function App() {
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
         <StatusBar style="light" />
 
-        <Text style={styles.dataBanner} accessibilityRole="text">
-          {dataStatus === "live" ? "Backend connected" : dataStatus === "demo" ? "Demo fleet data" : "Connection lost — showing cached fleet data"}
-          {lastFetchedAt ? ` · Last fleet fetch: ${new Date(lastFetchedAt).toLocaleTimeString()}` : ""}
-          {" · Battery reading ages shown per vehicle."}
-          {fleetError ? ` · ${fleetError}` : ""}
-        </Text>
+        {(dataStatus !== "live" || fleetError) && (
+          <Text
+            style={[
+              styles.dataBanner,
+              dataStatus === "cached" && styles.dataBannerCached,
+            ]}
+            accessibilityRole="text"
+          >
+            {dataStatus === "demo"
+              ? "Demo fleet data"
+              : "Connection lost — showing cached fleet data"}
+            {lastFetchedAt
+              ? ` · Last fleet fetch: ${new Date(lastFetchedAt).toLocaleTimeString()}`
+              : ""}
+            {" · Battery reading ages shown per vehicle."}
+            {` · API: ${API_URL}`}
+            {fleetError ? ` · ${fleetError}` : ""}
+          </Text>
+        )}
         {/* Screen Container */}
         <View style={styles.content}>
           {currentTab === "battery" && (
@@ -255,6 +268,9 @@ export default function App() {
           {currentTab === "dashboard" && (
             <DashboardScreen
               vehicles={vehicles}
+              telemetry={telemetry}
+              selectedVehicle={selectedVehicle}
+              dataStatus={dataStatus}
               onNavigateTab={setCurrentTab}
               onSelectVehicle={setSelectedVehicle}
               refreshing={refreshing}
@@ -356,6 +372,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.riskCautionBg,
     padding: 10,
     fontSize: 12,
+  },
+  dataBannerLive: {
+    color: colors.riskSafeText,
+    backgroundColor: colors.riskSafeBg,
+  },
+  dataBannerCached: {
+    color: colors.riskDangerText,
+    backgroundColor: colors.riskDangerBg,
   },
   content: {
     flex: 1,
