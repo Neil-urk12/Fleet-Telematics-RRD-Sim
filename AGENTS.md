@@ -26,9 +26,11 @@ every listed capability exists in this repository.
   (`garage/GaragePage.tsx`, rendered in the page area beside the sidebar; `onCreate` only
   with a live backend; the map and other pages unmount while it is open): its "New vehicle" bay
   swaps the rail to the known-EV catalog (`src/evModels.ts`, approximate published
-  specs) with 3D previews built after the fleet (`catalogReady`, `preview()`; the
-  each catalog model has its own silhouette in `scene.js` `MODELS`, built from published
-  dimensions and light signature; other model names fall back to two generic bodies; not exact replicas). Picking a model puts it on
+  specs) with 3D previews built after the fleet (`catalogReady`, `preview()`;
+  each catalog model has its own entry in `scene.js` `MODELS`: published dimensions plus a
+  hand-placed side profile (`shape()`: hood and roof lines, window edges, pillars), light
+  signature, wheels and signature paint, all procedural with no mesh assets; other model
+  names fall back to two generic bodies; not exact replicas). Picking a model puts it on
   the lift and supplies model, battery capacity, efficiency and curb mass to the
   `VehicleForm.tsx` add form (`spec` prop; regen keeps its 0.60 default); the form
   only asks for ID, name, status, SOC and SOH. The edit form keeps every spec editable.
@@ -90,6 +92,8 @@ Root (pnpm workspace):
 - `pnpm test:client` — standalone shared-client checks (no backend or browser needed).
 - `node apps/web/scripts/build-route-data.mjs` — regenerate `routeData.ts` from public
   OSRM and OpenTopoData services (manual, one-off); `--check [file]` validates it offline.
+- `node apps/web/scripts/check-garage-models.mjs` — checks that every catalog EV in
+  `evModels.ts` has its own garage body in `scene.js` `MODELS` (no backend or browser needed).
 
 From `backend/`:
 
