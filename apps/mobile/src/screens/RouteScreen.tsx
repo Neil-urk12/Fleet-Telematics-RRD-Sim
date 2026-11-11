@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -241,23 +240,8 @@ export const RouteScreen: React.FC<RouteScreenProps> = ({
       const point = worldPx(lat, lon, zoom);
       return { x: point.x - originX, y: point.y - originY };
     };
-    const x0 = Math.floor(originX / TILE);
-    const y0 = Math.floor(originY / TILE);
-    const x1 = Math.floor((originX + mapSize.width) / TILE);
-    const y1 = Math.floor((originY + mapSize.height) / TILE);
-    const tiles: { key: string; uri: string; left: number; top: number }[] = [];
-    for (let x = x0; x <= x1; x++) {
-      for (let y = y0; y <= y1; y++) {
-        tiles.push({
-          key: `${zoom}-${x}-${y}`,
-          uri: `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`,
-          left: x * TILE - originX,
-          top: y * TILE - originY,
-        });
-      }
-    }
     const simplified = ROUTE_GEOMETRY.filter((_, index) => index % 2 === 0 || index === ROUTE_GEOMETRY.length - 1);
-    return { toLocal, tiles, simplified: simplified.map(([lat, lon]) => toLocal(lat, lon)) };
+    return { toLocal, simplified: simplified.map(([lat, lon]) => toLocal(lat, lon)) };
   }, [mapSize]);
 
   if (!current || vehicles.length === 0) {
@@ -387,10 +371,6 @@ export const RouteScreen: React.FC<RouteScreenProps> = ({
           onStartShouldSetResponder={() => true}
           onResponderRelease={(event) => seekFromMap(event.nativeEvent.locationX, event.nativeEvent.locationY)}
         >
-          {mapFrame?.tiles.map((tile) => (
-            <Image key={tile.key} source={{ uri: tile.uri }} style={[styles.tile, { left: tile.left, top: tile.top }]} />
-          ))}
-          <View pointerEvents="none" style={styles.mapShade} />
           {mapFrame && mapFrame.simplified.slice(1).map((point, index) => {
             const prev = mapFrame.simplified[index];
             return (
@@ -450,7 +430,9 @@ export const RouteScreen: React.FC<RouteScreenProps> = ({
             return <View pointerEvents="none" style={[styles.previewDot, { left: point.x - 6, top: point.y - 6 }]} />;
           })() : null}
         </View>
-        <Text style={styles.attribution}>© OpenStreetMap contributors. Route: OSRM, elevation: SRTM</Text>
+        <Text style={styles.attribution}>
+          Street tiles are left off in the app. The line is the stored Manila → Baguio road (© OpenStreetMap contributors, via OSRM; elevation: SRTM).
+        </Text>
         {unreported.length > 0 ? (
           <Text style={styles.dataNote}>No position reported: {unreported.map((vehicle) => vehicle.id).join(", ")}</Text>
         ) : null}
@@ -623,8 +605,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#0b1320",
   },
-  tile: { position: "absolute", width: TILE, height: TILE },
-  mapShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(10, 14, 23, 0.28)" },
   waypoint: {
     position: "absolute",
     width: 8,

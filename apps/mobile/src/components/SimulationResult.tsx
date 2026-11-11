@@ -1,8 +1,34 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { formatBatteryHistory, formatBatteryState, formatSimulationConditions, getSimulationEnergyBreakdown } from "@fleet/api-client";
-import type { SimulationAssessment } from "@fleet/api-client";
+import type { SimulationAssessment, SimulationResponse } from "@fleet/api-client";
 import { colors } from "../constants/theme";
+
+function getVerdict(result: SimulationResponse, reservePct: number) {
+  const arrival = Math.floor(result.projected_arrival_soc_pct);
+  const runsOut = result.projected_arrival_soc_pct < 0;
+  if (result.risk_level === "SAFE") {
+    return {
+      mark: "✓",
+      title: "Yes, you'll make it",
+      detail: `You should arrive with about ${arrival}% battery, above your ${reservePct}% safety margin.`,
+    };
+  }
+  if (result.risk_level === "CAUTION") {
+    return {
+      mark: "!",
+      title: "You'll make it, but it's close",
+      detail: `You should arrive with about ${arrival}% battery, below your ${reservePct}% safety margin.`,
+    };
+  }
+  return {
+    mark: "✕",
+    title: runsOut ? "The battery runs out before you arrive" : "Charge before this trip",
+    detail: runsOut
+      ? `You'd be about ${Math.ceil(-result.projected_arrival_soc_pct)}% of a full battery short. Plan a charging stop or choose another vehicle.`
+      : `Only about ${arrival}% battery would be left, well below your ${reservePct}% safety margin.`,
+  };
+}
 
 interface SimulationResultProps {
   assessment: SimulationAssessment;
@@ -12,6 +38,8 @@ interface SimulationResultProps {
 export const SimulationResult: React.FC<SimulationResultProps> = ({ assessment, isOutdated }) => {
   const { request, response: result, origin } = assessment;
   const breakdown = origin === "backend" ? getSimulationEnergyBreakdown(result) : null;
+  const verdict = getVerdict(result, request.reserve_soc_target_pct ?? 15);
+  const arrivalLabel = result.projected_arrival_soc_pct < 0 ? "Empty" : `${Math.floor(result.projected_arrival_soc_pct)}%`;
   const getBadgeStyle = () => {
     switch (result.risk_level) {
       case "SAFE":
@@ -36,12 +64,29 @@ export const SimulationResult: React.FC<SimulationResultProps> = ({ assessment, 
 
   return (
     <View style={styles.resultCard}>
-      <Text accessibilityRole="header" style={styles.resultTitle}>Route assessment — {result.vehicle_id}</Text>
       {isOutdated && (
         <Text accessibilityRole="alert" style={styles.outdatedNotice}>
-          Outdated result — inputs or vehicle state changed. Assess again to update.
+          You changed something since this result. Press Simulate trip again to update it.
         </Text>
       )}
+      <View style={[styles.verdict, getBadgeStyle()]}>
+        <Text style={[styles.verdictMark, getTextStyle()]}>{verdict.mark}</Text>
+        <View style={styles.verdictCopy}>
+          <Text style={styles.resultTitle}>{verdict.title}</Text>
+          <Text style={styles.detailRow}>{verdict.detail}</Text>
+          <Text style={styles.note}>{result.vehicle_id} · {origin === "local" ? "offline demo estimate" : "estimate from the backend model"}</Text>
+        </View>
+      </View>
+      <View style={styles.statsRow}>
+        <Text style={styles.detailRow}>Battery on arrival: {arrivalLabel}</Text>
+        <Text style={styles.detailRow}>Range left after trip: {result.remaining_range_km.toFixed(0)} km</Text>
+        <Text style={styles.detailRow}>Energy used: {result.estimated_energy_consumption_kwh.toFixed(1)} kWh</Text>
+      </View>
+      <Text accessibilityRole="header" style={styles.sectionTitle}>What you can do</Text>
+      {result.recommendations.map((recommendation, index) => (
+        <Text key={index} style={styles.detailRow}>• {recommendation}</Text>
+      ))}
+      <Text accessibilityRole="header" style={styles.sectionTitle}>How this was calculated</Text>
       <Text style={styles.detailRow}>
         {origin === "local" ? "Offline demo estimate · Simplified local model" : "Backend assessment · Heuristic PoC model"}
       </Text>
@@ -54,11 +99,8 @@ export const SimulationResult: React.FC<SimulationResultProps> = ({ assessment, 
       <Text style={styles.detailRow}>
         {origin === "local" ? "History stress not modelled in the offline estimate." : formatBatteryHistory(result.battery_history)}
       </Text>
-      <View style={[styles.riskBadge, getBadgeStyle()]}>
-        <Text style={[styles.riskText, getTextStyle()]}>{result.risk_level.replaceAll("_", " ")}</Text>
-      </View>
       <Text style={styles.detailRow}>
-        Projected Arrival SOC: {result.projected_arrival_soc_pct.toFixed(1)}%
+        Arrival SOC: {result.projected_arrival_soc_pct.toFixed(1)}% · {result.risk_level.replaceAll("_", " ")}
       </Text>
       <Text style={styles.detailRow}>
         Net consumption: {result.estimated_energy_consumption_kwh.toFixed(2)} kWh
@@ -111,10 +153,6 @@ export const SimulationResult: React.FC<SimulationResultProps> = ({ assessment, 
           Connect to the backend to assess those inputs.
         </Text>
       )}
-      <Text accessibilityRole="header" style={styles.sectionTitle}>Recommendations</Text>
-      {result.recommendations.map((recommendation, index) => (
-        <Text key={index} style={styles.detailRow}>• {recommendation}</Text>
-      ))}
     </View>
   );
 };
@@ -133,13 +171,16 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: 8,
   },
-  riskBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+  verdict: {
+    flexDirection: "row",
+    gap: 10,
+    borderRadius: 8,
+    padding: 12,
     marginBottom: 10,
   },
+  verdictMark: { fontSize: 22, fontWeight: "700" },
+  verdictCopy: { flex: 1 },
+  statsRow: { marginBottom: 4 },
   riskSafe: {
     backgroundColor: colors.riskSafeBg,
   },

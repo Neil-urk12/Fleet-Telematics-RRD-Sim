@@ -278,8 +278,8 @@ export default function App() {
               assessment={assessment}
               loading={loading}
               error={error}
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
+              dataStatus={dataStatus}
+              onNavigateTab={setCurrentTab}
             />
           )}
 
