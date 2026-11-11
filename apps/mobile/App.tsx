@@ -3,7 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { AppState, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { FleetApiError, getSimulationVehicleProfile } from "@fleet/api-client";
-import type { SimulationAssessment, SimulationRequest, SimulationResponse, TelemetryEvent, Vehicle, VehicleCreate } from "@fleet/api-client";
+import type { SimulationAssessment, SimulationRequest, SimulationResponse, TelemetryEvent, Vehicle, VehicleCreate, VehicleUpdate } from "@fleet/api-client";
 
 import { client } from "./src/config/api";
 import { colors } from "./src/constants/theme";
@@ -214,6 +214,22 @@ export default function App() {
     setCurrentTab("simulator");
   };
 
+  const handleUpdateVehicle = async (vehicleId: string, payload: VehicleUpdate): Promise<Vehicle> => {
+    const updated = await client.updateVehicle(vehicleId, payload);
+    setVehicles(current => current.map(v => (v.id === vehicleId ? updated : v)));
+    setSelectedVehicle(prev => (prev?.id === vehicleId ? updated : prev));
+    void loadVehicles(false);
+    return updated;
+  };
+
+  const handleDeleteVehicle = async (vehicleId: string): Promise<void> => {
+    await client.deleteVehicle(vehicleId);
+    setVehicles(current => current.filter(v => v.id !== vehicleId));
+    setTelemetry(({ [vehicleId]: _removed, ...rest }) => rest);
+    setSelectedVehicle(prev => (prev?.id === vehicleId ? null : prev));
+    void loadVehicles(false);
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
@@ -267,10 +283,14 @@ export default function App() {
               selectedVehicle={selectedVehicle}
               loading={loading}
               error={fleetError}
+              dataStatus={dataStatus}
               onSelectVehicle={setSelectedVehicle}
               onRefresh={handleRefresh}
               onSimulateWithVehicle={handleSimulateWithVehicle}
               refreshing={refreshing}
+              onNavigateTab={setCurrentTab}
+              onUpdateVehicle={dataStatus === "live" ? handleUpdateVehicle : undefined}
+              onDeleteVehicle={dataStatus === "live" ? handleDeleteVehicle : undefined}
             />
           )}
 
