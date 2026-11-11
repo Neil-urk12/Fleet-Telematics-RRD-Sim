@@ -20,10 +20,13 @@ const wrapPi = a => { a = (a + Math.PI) % (Math.PI * 2); if (a < 0) a += Math.PI
 const phys = (i, dist, decay, d) => i * Math.PI * Math.pow(Math.max(0, 1 - d / dist), decay) * Math.pow(d, decay);
 
 /* ---------- vehicle → body ---------- */
-export const BODY_LABEL = { lumen: 'Sedan / crossover', basalt: 'Truck / SUV' };
+// Known catalog models (MODELS) get their own silhouette; any other name falls back to the two generic bodies.
+export const BODY_LABEL = { lumen: 'Sedan / crossover', basalt: 'Truck / SUV', sedan: 'Sedan', hatch: 'Hatchback', crossover: 'Crossover', pickup: 'Pickup truck', suv: 'SUV', van: 'Cargo van' };
+const specFor = model => MODELS.find(m => m.re.test(model));
 export function bodyFor(model) {
-  return /f-?150|silverado|r1t|r1s|truck|pickup|van|suv/i.test(model) ? 'basalt' : 'lumen';
+  return specFor(model)?.body ?? (/f-?150|silverado|r1t|r1s|truck|pickup|van|suv/i.test(model) ? 'basalt' : 'lumen');
 }
+const defFor = model => specFor(model)?.def ?? BODIES[bodyFor(model)];
 
 /* ---------- canvas helpers ---------- */
 function makeCanvas(w, h, draw) {
@@ -154,7 +157,7 @@ function makeTireGeo(r, w, rimR) {
 /* ---------- bodies ---------- */
 const BODIES = {
   lumen: {
-    paints: [0xebedef, 0x0c0d10, 0x5cb6b1, 0xc49a3c, 0x4a2e8e, 0xe56e58],
+    fam: 'lumen', paints: [0xebedef, 0x0c0d10, 0x5cb6b1, 0xc49a3c, 0x4a2e8e, 0xe56e58],
     finish: { metalness: 0.04, roughness: 0.16, clearcoat: 1, cr: 0.02 },
     rim: { hex: 0x3a3d43, m: .9, r: .3 }, caliper: 0xf0b512, rimStyle: 'aero',
     geo: {
@@ -174,7 +177,7 @@ const BODIES = {
     }
   },
   basalt: {
-    paints: [0xb9a079, 0x535a3b, 0xe5e9ec, 0x8a3a1c, 0x3c4249, 0xd0601b],
+    fam: 'basalt', paints: [0xb9a079, 0x535a3b, 0xe5e9ec, 0x8a3a1c, 0x3c4249, 0xd0601b],
     finish: { metalness: 0.3, roughness: 0.56, clearcoat: 0.12, cr: 0.55 },
     rim: { hex: 0x101113, m: .5, r: .2 }, caliper: 0x18191b, rimStyle: 'steel',
     geo: {
@@ -182,7 +185,7 @@ const BODIES = {
       top: [[-2.38, 1.16], [-2.28, 1.33], [-1.0, 1.36], [0.0, 1.36], [0.9, 1.35], [1.6, 1.28], [2.3, 1.24], [2.55, 1.08]],
       width: [[-2.38, 0.94], [-2.15, 0.97], [2.25, 0.97], [2.55, 0.93]],
       flareF: 0.07, flareR: 0.07, n: 7, tumble: 0.06, tuck: 0.12, track: 0.85, doors: [0.85, -0.45, -1.5],
-      gh: { roof: [[-2.3, 1.30], [-2.24, 1.86], [-2.0, 1.95], [0.0, 1.96], [0.4, 1.92], [0.92, 1.30]], width: [[-2.3, 0.86], [0.92, 0.86]], n: 7, tumble: 0.1, roofPaint: [-2.1, 0.32, 1.1], mirrorS: 0.82 }
+      gh: { roof: [[-2.3, 1.30], [-2.24, 1.86], [-2.0, 1.95], [0.0, 1.96], [0.4, 1.92], [0.92, 1.30]], width: [[-2.3, 0.86], [0.92, 0.86]], n: 7, tumble: 0.1, roofPaint: [[-2.1, 0.32, 1.1]], mirrorS: 0.82 }
     },
     build(a, M) {
       const V = THREE.Vector3;
@@ -210,6 +213,99 @@ const BODIES = {
     }
   }
 };
+
+/* ---------- known models ---------- */
+// Catalog EVs: silhouette from published length / width / height / wheelbase (metres) plus the
+// model's light signature. Recognisable proportions, not exact replicas.
+// tail: 0 = notchback boot … 1 = upright hatch.
+function carGeo({ L, W, H, wb, r, foh, tail, sill = 0.2, n = 3, nose = 0.64, ghN = 2.6, tumble = 0.5, glassRoof }) {
+  const sMax = L / 2, sMin = -sMax, axF = sMax - foh, axR = axF - wb, tw = 0.25, hw = W / 2 - 0.04, b = H * 0.64, ws = axF - 0.4;
+  const T = (x, y) => lerp(x, y, tail), g0 = sMin + T(0.36, 0.1), cp = sMin + T(0.95, 0.5); // cp: rear pillar
+  const roofPaint = [[cp, cp + T(0.16, 0.3), 1.7]];
+  if (!glassRoof) roofPaint.push([cp, ws - 0.75, 0.95]);
+  return {
+    belt: b, hw, sMin, sMax, rf: 0.38, rr: T(0.35, 0.22), pf: 0.42, pr: 0.5, sill, r, tw, axF, axR, archGap: 0.04,
+    top: [[sMin, b * T(0.75, 0.9)], [sMin + 0.2, b * T(0.91, 0.98)], [sMin + 0.7, b], [0, b], [axF - 0.6, b * 0.98], [axF + 0.05, b * 0.91], [sMax - 0.32, b * lerp(nose, 0.91, 0.6)], [sMax, b * nose]],
+    width: [[sMin, hw * T(0.62, 0.78)], [sMin + 0.36, hw * T(0.84, 0.92)], [sMin + 1.15, hw * 0.98], [0, hw], [axF, hw * 0.99], [sMax - 0.32, hw * 0.95], [sMax, hw * 0.82]],
+    flareF: 0.012, flareR: 0.03, n, tumble: 0.22, tuck: 0.2, track: W / 2 - tw / 2 - 0.015, doors: [axF - 0.52, axF - 1.62, axR + 0.4],
+    gh: {
+      roof: [[g0, b * 0.9], [sMin + T(0.76, 0.5), H * T(0.745, 0.92)], [sMin + 1.36, H * T(0.875, 0.985)], [ws - 1.1, H], [ws - 0.6, H * 0.907], [ws, b * 0.9]],
+      width: [[g0, hw * T(0.43, 0.7)], [sMin + 1.16, hw * T(0.65, 0.76)], [-0.4, hw * 0.77], [0.4, hw * 0.77], [ws, hw * 0.71]],
+      n: ghN, tumble, roofPaint, mirrorS: ws - 0.15
+    }
+  };
+}
+// bed: pickup bed length (0 = roof runs to the tail); sail: painted buttress behind the cab; van: panelled sides.
+function boxGeo({ L, W, H, wb, r, foh, belt, nose, bed = 0, sail = 0, wsBack = 0.45, wsRun = 0.7, sill = 0.36, van }) {
+  const sMax = L / 2, sMin = -sMax, axF = sMax - foh, axR = axF - wb, tw = 0.3, hw = W / 2 - 0.05;
+  const ws = axF - wsBack, roofF = ws - wsRun, cb = sMin + bed + 0.03, d0 = axF - 0.5, d1 = d0 - 1.1, gw = hw * (van ? 0.97 : 0.9);
+  const roofPaint = [[van ? sMin - 1 : cb + 0.15, roofF + 0.05, 1.0]];
+  if (van) roofPaint.push([sMin - 1, d1, 1.7]);
+  if (sail) roofPaint.push([cb - sail - 1, cb + 0.15, 1.7]);
+  return {
+    belt, nose, hw, bed, sail, sMin, sMax, rf: 0.22, rr: 0.14, pf: 0.5, pr: 0.5, sill, r, tw, axF, axR, archGap: 0.07, boxFlare: true,
+    top: [[sMin, belt - 0.03], [sMin + 0.12, belt], [0, belt], [ws, belt - 0.02], [sMax - 0.35, lerp(nose, belt, 0.7)], [sMax, nose]],
+    width: [[sMin, hw * 0.96], [sMin + 0.2, hw], [sMax - 0.35, hw], [sMax, hw * 0.93]],
+    flareF: 0.05, flareR: 0.05, n: 5, tumble: 0.06, tuck: 0.12, track: W / 2 - tw / 2 - 0.02, doors: [d0, d1, d1 - (van ? 1.3 : 0.95)].concat(bed ? [cb] : []),
+    gh: {
+      roof: [[cb - sail, belt - 0.06], [cb + 0.07, H * 0.95], [cb + 0.35, H], [roofF - 0.3, H], [roofF, H * 0.97], [ws, belt - 0.06]],
+      width: [[cb - sail, gw], [ws, gw]], n: 6, tumble: van ? 0.04 : 0.12, roofPaint, mirrorS: ws - 0.2
+    }
+  };
+}
+// lamp helpers: mirrored strips, mirrored patches
+const eyes = (a, end, y, x0, x1, h, kind) => a.mirrorX(sx => a.strip(end, y, sx * x0, sx * x1, h, kind));
+const pair = (a, end, x0, x1, y0, y1, mat) => { a.grille(end, x0, x1, y0, y1, mat, 3, 3); a.grille(end, -x1, -x0, y0, y1, mat, 3, 3); };
+function carLamps({ bar, barR, band, vTail, tri, thick = 0.028 } = {}) {
+  return (a, M) => {
+    const { belt: b, hw, sMin, sMax, sill } = a.D, yF = b * 0.72, yR = a.top(sMin) * 0.95, tail = a.lampMat('tail');
+    if (band) a.grille(1, -hw * 0.5, hw * 0.5, yF - 0.07, yF + 0.03, M.carbon, 10, 2);
+    eyes(a, 1, yF, hw * 0.5, hw * 0.86, thick, 'head');
+    if (bar) a.strip(1, yF, -hw * 0.5, hw * 0.5, 0.006, 'head');
+    a.grille(1, -hw * 0.55, hw * 0.55, sill + 0.05, sill + 0.13, M.grilleHoney, 10, 2);
+    if (vTail) pair(a, -1, hw * 0.66, hw * 0.84, yR - 0.24, yR, tail);
+    else if (tri) [0.46, 0.6, 0.74].forEach(k => pair(a, -1, hw * k, hw * (k + 0.09), yR - 0.13, yR + 0.01, tail));
+    else eyes(a, -1, yR, hw * 0.45, hw * 0.88, thick + 0.004, 'tail');
+    if (barR) a.strip(-1, yR, -hw * 0.45, hw * 0.45, 0.01, 'tail');
+    a.grille(-1, -hw * 0.7, hw * 0.7, sill + 0.03, sill + 0.13, M.carbon, 8, 2);
+    a.plate(b * 0.56);
+    a.mirrorX(sx => a.sideStripe(sx, sMin + 0.35, sMax - 0.3, sill + 0.1, 0.055, M.carbon));
+  };
+}
+function boxLamps({ bar, clamps, ovals, low, van, barR, vTail } = {}) {
+  return (a, M) => {
+    const { belt, nose, hw, bed, sail, sMin, sMax, sill } = a.D, yF = nose - 0.13, head = a.lampMat('head');
+    if (bar) a.strip(1, yF, -hw * 0.86, hw * 0.86, 0.014, 'head');
+    if (clamps) { a.grille(1, -hw * 0.68, hw * 0.68, yF - 0.3, yF - 0.04, M.carbon, 10, 3); pair(a, 1, hw * 0.72, hw * 0.9, yF - 0.28, yF - 0.03, head); }
+    if (ovals) a.mirrorX(sx => a.round(1, sx * hw * 0.66, yF - 0.02, 0.065, 'head', 2));
+    if (low) pair(a, 1, hw * 0.58, hw * 0.9, yF - 0.3, yF - 0.2, head);
+    if (van) { a.grille(1, -hw * 0.48, hw * 0.48, nose - 0.42, nose - 0.14, M.grilleSlats); pair(a, 1, hw * 0.56, hw * 0.9, nose - 0.3, nose - 0.14, head); }
+    a.grille(1, -hw * 0.9, hw * 0.9, sill + 0.04, sill + 0.2, M.matteBlack, 10, 2);
+    if (barR) a.strip(-1, belt - 0.2, -hw * 0.86, hw * 0.86, 0.02, 'tail');
+    if (vTail) pair(a, -1, hw * 0.8, hw * 0.94, belt - 0.5, belt - 0.12, a.lampMat('tail'));
+    a.grille(-1, -hw * 0.9, hw * 0.9, sill + 0.04, sill + 0.2, M.matteBlack, 10, 2);
+    a.plate(belt - 0.55);
+    a.mirrorX(sx => a.sideStripe(sx, sMin + 0.3, sMax - 0.3, sill + 0.1, 0.08, M.matteBlack));
+    if (bed) { const len = bed - sail - 0.12; a.box(hw * 1.5, 0.04, len, M.matteBlack, 0, belt, sMin + 0.1 + len / 2); } // tonneau cover
+  };
+}
+const known = (re, body, geo, build) => ({ re, body, def: { ...BODIES.lumen, fam: geo.boxFlare ? 'basalt' : 'lumen', geo, build } });
+const MODELS = [
+  known(/model 3/i, 'sedan', carGeo({ L: 4.69, W: 1.85, H: 1.44, wb: 2.875, r: 0.335, foh: 0.84, tail: 0.3, nose: 0.58, glassRoof: true }), carLamps()),
+  known(/model y/i, 'crossover', carGeo({ L: 4.75, W: 1.92, H: 1.62, wb: 2.89, r: 0.355, foh: 0.88, tail: 0.6, sill: 0.23, glassRoof: true }), carLamps()),
+  known(/bolt/i, 'hatch', carGeo({ L: 4.145, W: 1.765, H: 1.61, wb: 2.6, r: 0.32, foh: 0.83, tail: 0.95, sill: 0.22, nose: 0.7, ghN: 3 }), carLamps({ band: true })),
+  known(/leaf/i, 'hatch', carGeo({ L: 4.49, W: 1.79, H: 1.54, wb: 2.7, r: 0.32, foh: 0.95, tail: 0.8 }), carLamps({ band: true, vTail: true })),
+  known(/ioniq 5/i, 'crossover', carGeo({ L: 4.635, W: 1.89, H: 1.605, wb: 3.0, r: 0.37, foh: 0.845, tail: 0.85, sill: 0.23, n: 3.8, nose: 0.72, ghN: 3.6, tumble: 0.34 }), carLamps({ band: true, bar: true, barR: true, thick: 0.045 })),
+  known(/ev6/i, 'crossover', carGeo({ L: 4.68, W: 1.88, H: 1.55, wb: 2.9, r: 0.37, foh: 0.86, tail: 0.55, sill: 0.22 }), carLamps({ barR: true })),
+  known(/id\.? ?4/i, 'crossover', carGeo({ L: 4.585, W: 1.85, H: 1.64, wb: 2.765, r: 0.37, foh: 0.88, tail: 0.8, sill: 0.23, nose: 0.68, ghN: 3 }), carLamps({ bar: true, barR: true })),
+  known(/mach-?e/i, 'crossover', carGeo({ L: 4.71, W: 1.88, H: 1.62, wb: 2.985, r: 0.365, foh: 0.86, tail: 0.5, sill: 0.23 }), carLamps({ tri: true })),
+  known(/lightning|f-?150/i, 'pickup', boxGeo({ L: 5.91, W: 2.03, H: 1.99, wb: 3.7, r: 0.42, foh: 0.95, belt: 1.32, nose: 1.18, bed: 1.75 }), boxLamps({ bar: true, clamps: true, barR: true, vTail: true })),
+  known(/r1t/i, 'pickup', boxGeo({ L: 5.51, W: 2.08, H: 1.92, wb: 3.45, r: 0.43, foh: 0.9, belt: 1.25, nose: 1.1, bed: 1.45 }), boxLamps({ bar: true, ovals: true, barR: true })),
+  known(/r1s/i, 'suv', boxGeo({ L: 5.1, W: 2.08, H: 1.96, wb: 3.075, r: 0.43, foh: 0.9, belt: 1.25, nose: 1.1 }), boxLamps({ bar: true, ovals: true, barR: true })),
+  known(/silverado/i, 'pickup', boxGeo({ L: 5.92, W: 2.13, H: 1.99, wb: 3.7, r: 0.44, foh: 0.98, belt: 1.34, nose: 1.16, bed: 1.85, sail: 0.75, wsBack: 0.25, wsRun: 0.95 }), boxLamps({ bar: true, low: true, vTail: true })),
+  known(/e-?transit/i, 'van', boxGeo({ L: 5.98, W: 2.06, H: 2.53, wb: 3.75, r: 0.355, foh: 1.02, belt: 1.3, nose: 0.98, wsBack: 0.1, wsRun: 0.85, sill: 0.3, van: true }), boxLamps({ van: true, vTail: true })),
+  known(/sprinter/i, 'van', boxGeo({ L: 5.93, W: 2.02, H: 2.62, wb: 3.665, r: 0.385, foh: 1.0, belt: 1.34, nose: 1.02, wsBack: 0.1, wsRun: 0.8, sill: 0.3, van: true }), boxLamps({ van: true, vTail: true }))
+];
 
 const R_TT = 3.35, TT_TOP = 0.07;
 const VIEWS = {
@@ -538,9 +634,11 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
     return w;
   }
 
-  function buildCar(body, paintHex, plateText) {
-    const def = BODIES[body], D = def.geo;
+  function buildCar(def, paintHex, plateText) {
+    const D = def.geo;
     const car = { root: new THREE.Group(), rig: new THREE.Group(), glows: [], D, paintHex };
+    // camera pull-back for long/tall bodies; 1 for the two generic bodies
+    car.k = Math.max(1, (D.sMax - D.sMin) / 5.1, Math.max(...D.gh.roof.map(p => p[1])) / 2.05);
     car.root.add(car.rig);
     const f = def.finish;
     const paint = new THREE.MeshPhysicalMaterial({ color: paintHex, envMapIntensity: 1.25, metalness: f.metalness, roughness: f.roughness, clearcoat: f.clearcoat, clearcoatRoughness: f.cr });
@@ -570,7 +668,7 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
     const G = D.gh, roof = curve(G.roof), gw = curve(G.width);
     const ghSec = s => { const base = top(s) - 0.07, rf = Math.max(roof(s), base + 0.004); return { w: gw(s), b: base - (rf - base) * 0.9, t: rf, n: G.n, tumble: G.tumble, tuck: 0.35 }; };
     const rp = G.roofPaint;
-    const gh = new THREE.Mesh(loft(G.roof[0][0], G.roof[G.roof.length - 1][0], 90, 40, ghSec, { rf: 0.08, rr: 0.08, pf: 0.5, pr: 0.5 }, rp ? (s, j) => { const th = j / 40 * Math.PI * 2; return s > rp[0] && s < rp[1] && Math.abs(th - Math.PI) < (rp[2] || 0.95); } : null), [M.glass, paint]);
+    const gh = new THREE.Mesh(loft(G.roof[0][0], G.roof[G.roof.length - 1][0], 90, 40, ghSec, { rf: 0.08, rr: 0.08, pf: 0.5, pr: 0.5 }, rp ? (s, j) => { const th = j / 40 * Math.PI * 2; return rp.some(([s0, s1, ang]) => s > s0 && s < s1 && Math.abs(th - Math.PI) < ang); } : null), [M.glass, paint]);
     gh.castShadow = true; car.rig.add(gh);
     [-1, 1].forEach(sx => {
       const ms = G.mirrorS, my = top(ms) + 0.1, mx = sx * (gw(ms) + 0.14);
@@ -609,7 +707,7 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
       for (let i = 0; i < hits.length; i += step) car.glows.push({ kind, p: hits[i].p.clone(), n: hits[i].n.clone() });
     };
     const api = {
-      car, lampMat, glow,
+      car, lampMat, glow, D, top,
       add(o) { car.rig.add(o); return o; },
       mirrorX(fn) { fn(1); fn(-1); },
       strip(end, y, x0, x1, halfH, kind) {
@@ -617,9 +715,9 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
         const m = ribbon(bodyMesh, os, new V(0, 0, -end), new V(0, 1, 0), halfH, lampMat(kind), 0.006);
         if (m) { car.rig.add(m); glow(kind, m.userData.hits); }
       },
-      round(end, x, y, r, kind) {
+      round(end, x, y, r, kind, tall = 1) {
         const h = hit(bodyMesh, new V(x, y, end * 6), new V(0, 0, -end)); if (!h) return;
-        const g = new THREE.Group(); g.position.copy(h.p).addScaledVector(h.n, 0.012); orientTo(g, h.n);
+        const g = new THREE.Group(); g.position.copy(h.p).addScaledVector(h.n, 0.012); orientTo(g, h.n); g.scale.y = tall;
         g.add(new THREE.Mesh(new THREE.CircleGeometry(r, 28), lampMat(kind)));
         g.add(new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.16, 8, 28), kind === 'tail' ? M.trim : M.chrome));
         const back = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.8, 0.05, 28, 1, true), M.trim); back.rotation.x = Math.PI / 2; back.position.z = -0.025; g.add(back);
@@ -744,7 +842,7 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
     const k = Math.min(1, dt * 5.5);
     orbit.th += (orbit.g.th - orbit.th) * k; orbit.ph += (orbit.g.ph - orbit.ph) * k; orbit.rad += (orbit.g.rad - orbit.rad) * k;
     orbit.tgt.lerp(orbit.g.tgt, k);
-    const r = orbit.rad * orbit.fitK;
+    const r = orbit.rad * orbit.fitK * (current ? current.k : 1);
     _cam.set(Math.sin(orbit.ph) * Math.sin(orbit.th) * r, Math.cos(orbit.ph) * r, Math.sin(orbit.ph) * Math.cos(orbit.th) * r).add(orbit.tgt);
     _cam.x = clamp(_cam.x, -10.3, 10.3); _cam.z = clamp(_cam.z, -7.3, 19.3); _cam.y = clamp(_cam.y, 0.25, garage.RH - 0.4);
     camera.position.copy(_cam);
@@ -793,8 +891,8 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
     const s = new THREE.Scene(); s.environment = envTex;
     const l = new THREE.DirectionalLight(0xffffff, 1.3 * Math.PI); l.position.set(3, 6, 4); s.add(l, new THREE.HemisphereLight(0xc8d4ff, 0x1a1a1a, 0.7 * Math.PI));
     const cam = new THREE.PerspectiveCamera(22, W / H, 0.1, 60);
-    const D = car.D, cz = (D.sMax + D.sMin) / 2;
-    cam.position.set(6.4, 1.9, 4.1 + cz); cam.lookAt(0, 0.62, cz - 0.05);
+    const D = car.D, cz = (D.sMax + D.sMin) / 2, k = car.k;
+    cam.position.set(6.4 * k, 1.9 * k, 4.1 * k + cz); cam.lookAt(0, 0.62 * k, cz - 0.05);
     s.add(car.root); car.root.position.set(0, 0, 0);
     const pr = renderer.getPixelRatio();
     renderer.setPixelRatio(1); renderer.setSize(W, H, false);
@@ -872,10 +970,10 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
   }
   const perBody = { lumen: 0, basalt: 0 };
   function park(v) {
-    const body = bodyFor(v.model), paints = BODIES[body].paints;
+    const def = defFor(v.model), paints = BODIES[def.fam].paints;
     // A car registered from a catalog preview keeps the paint it was shown in.
-    const paint = previewCars.get(v.model)?.paintHex ?? paints[perBody[body]++ % paints.length];
-    const car = buildCar(body, paint, v.id);
+    const paint = previewCars.get(v.model)?.paintHex ?? paints[perBody[def.fam]++ % paints.length];
+    const car = buildCar(def, paint, v.id);
     cars.push(car);
     return makeThumb(car);
   }
@@ -887,8 +985,8 @@ export function createGarage({ canvas, root, vehicles, catalog = [], startIndex 
     const per = { lumen: 0, basalt: 0 }, thumbs = [];
     for (const model of catalog) {
       if (disposed) break;
-      const body = bodyFor(model), paints = BODIES[body].paints;
-      const car = buildCar(body, paints[per[body]++ % paints.length], 'NEW');
+      const def = defFor(model), paints = BODIES[def.fam].paints;
+      const car = buildCar(def, paints[per[def.fam]++ % paints.length], 'NEW');
       previewCars.set(model, car);
       thumbs.push(makeThumb(car));
       progress();

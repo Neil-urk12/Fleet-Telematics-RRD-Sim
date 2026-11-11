@@ -27,7 +27,8 @@ every listed capability exists in this repository.
   with a live backend; the map and other pages unmount while it is open): its "New vehicle" bay
   swaps the rail to the known-EV catalog (`src/evModels.ts`, approximate published
   specs) with 3D previews built after the fleet (`catalogReady`, `preview()`; the
-  two garage bodies in per-model paints, not exact replicas). Picking a model puts it on
+  each catalog model has its own silhouette in `scene.js` `MODELS`, built from published
+  dimensions and light signature; other model names fall back to two generic bodies; not exact replicas). Picking a model puts it on
   the lift and supplies model, battery capacity, efficiency and curb mass to the
   `VehicleForm.tsx` add form (`spec` prop; regen keeps its 0.60 default); the form
   only asks for ID, name, status, SOC and SOH. The edit form keeps every spec editable.
