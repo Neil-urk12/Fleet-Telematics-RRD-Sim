@@ -185,6 +185,25 @@ export interface CompareSimulationResponse {
   results: { label: string; response: SimulationResponse }[];
 }
 
+/** The requested trip assessed at a projected future SOH. */
+export interface DegradationPoint {
+  years_ahead: number;
+  projected_soh_pct: number;
+  projected_arrival_soc_pct: number;
+  predicted_range_km: number;
+  risk_level: SimulationResponse["risk_level"];
+}
+
+export interface DegradationResponse {
+  vehicle_id: string;
+  /** RECORDED: fitted to the vehicle's SOH history; ASSUMED: illustrative PoC rate. */
+  basis: "RECORDED" | "ASSUMED";
+  soh_loss_pct_per_year: number;
+  readings_used: number;
+  span_days: number;
+  points: DegradationPoint[];
+}
+
 /** Specifications captured from the vehicle used by an assessment. */
 export type SimulationVehicleProfile = Required<Pick<Vehicle,
   | "battery_capacity_kwh"

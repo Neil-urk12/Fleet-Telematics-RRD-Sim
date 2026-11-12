@@ -210,6 +210,15 @@ disable selection. Select and assess chooses the vehicle and runs a fresh assess
 it does not dispatch the vehicle or update its operational status. Comparison requires
 a backend connection and writes saved runs through the existing batch endpoint.
 
+`POST /api/simulation/degradation` takes the same body as `/run` and assesses the trip
+at the vehicle's projected SOH today and 1, 2, 3 and 5 years ahead. The SOH loss rate is
+a least-squares fit over the vehicle's recorded history when it spans at least 30 days
+(`basis: RECORDED`, a rising SOH counts as zero loss); otherwise an illustrative
+`2.0 %/yr × (1 + stress score / 100)` is used (`basis: ASSUMED`). Only SOH changes
+between points, horizons where it reaches 0 are omitted, and nothing is saved: the points
+are hypothetical battery states, not assessments. This is a linear PoC projection, not a
+cell-ageing model.
+
 The web SOC chart and mobile offline estimate still use their own approximations.
 The web map, elevation chart and Manila → Baguio example trip share one generated
 dataset (`apps/web/src/routeData.ts`): the real road via Marcos Highway (Agoo → Pugo → Tuba),

@@ -142,3 +142,24 @@ class CompareResult(BaseModel):
 class CompareSimulationResponse(BaseModel):
     vehicle_id: str
     results: list[CompareResult]
+
+
+class DegradationPoint(BaseModel):
+    """The requested trip assessed at a projected future SOH."""
+
+    years_ahead: float
+    projected_soh_pct: float
+    projected_arrival_soc_pct: float
+    predicted_range_km: float
+    risk_level: Literal["SAFE", "CAUTION", "NOT_RECOMMENDED"]
+
+
+class DegradationResponse(BaseModel):
+    vehicle_id: str
+    basis: Literal["RECORDED", "ASSUMED"] = Field(
+        ..., description="RECORDED: fitted to SOH history; ASSUMED: illustrative PoC rate"
+    )
+    soh_loss_pct_per_year: float
+    readings_used: int
+    span_days: float
+    points: list[DegradationPoint]

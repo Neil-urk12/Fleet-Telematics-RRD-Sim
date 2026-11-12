@@ -81,6 +81,8 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
             setHistoryVersion(v => v + 1);
         }
     }, []);
+    // Projections are not saved, so the history panel does not reload.
+    const runDegradationProjection = useCallback((req: SimulationRequest) => api.projectDegradation(req), []);
     const getSimulationHistory = useCallback((vehicleId?: string) => api.getSimulationHistory(vehicleId), []);
     const getSimulationRecord = useCallback((recordId: string) => api.getSimulationRecord(recordId), []);
     const getVehicleHistory = useCallback((vehicleId: string) => api.getVehicleHistory(vehicleId), []);
@@ -122,7 +124,7 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     return {
         vehicles, telemetry, assessment, loading, error, simulationError, dataStatus,
         readingTime, lastFetchedAt, historyVersion,
-        isSimulating, refetch: fetchData, runSimulation, runBatchSimulation, runScenarioComparison,
+        isSimulating, refetch: fetchData, runSimulation, runBatchSimulation, runScenarioComparison, runDegradationProjection,
         getSimulationHistory, getSimulationRecord, getVehicleHistory,
         createVehicle, updateVehicle, deleteVehicle,
     };

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException
 
 from app.core import fleet_state, persistence
+from app.core.battery_history import assess_battery_history
 from app.core.simulator import calculate_simulation
+from app.core.soh_projection import fit_soh_trend, project_soh
 from app.schemas.simulation import (
     BatchSimulationRequest,
     BatchSimulationResponse,
@@ -9,6 +11,8 @@ from app.schemas.simulation import (
     CompareResult,
     CompareSimulationRequest,
     CompareSimulationResponse,
+    DegradationPoint,
+    DegradationResponse,
     SimulationRecord,
     SimulationRequest,
     SimulationResponse,
@@ -16,6 +20,8 @@ from app.schemas.simulation import (
 from app.schemas.vehicle import Vehicle
 
 router = APIRouter()
+
+DEGRADATION_HORIZONS_YEARS = (0, 1, 2, 3, 5)
 
 # Process-local cache of persisted simulation history, most recent last.
 SIMULATION_HISTORY: list[SimulationRecord] = []
@@ -135,3 +141,40 @@ def compare_simulations(req: CompareSimulationRequest) -> CompareSimulationRespo
         results.append(CompareResult(label=config.label, response=response))
 
     return CompareSimulationResponse(vehicle_id=req.vehicle_id, results=results)
+
+
+@router.post("/degradation", response_model=DegradationResponse)
+def project_degradation(req: SimulationRequest) -> DegradationResponse:
+    """Assess the same trip at the vehicle's projected future SOH. Nothing is saved:
+    the points describe hypothetical battery states, not assessments."""
+    vehicle = _vehicle_snapshot(req.vehicle_id)
+    try:
+        entries = fleet_state.get_vehicle_history(req.vehicle_id)
+    except KeyError:  # deleted since the snapshot
+        entries = []
+    trend = fit_soh_trend(entries, assess_battery_history(vehicle))
+
+    points: list[DegradationPoint] = []
+    for years in DEGRADATION_HORIZONS_YEARS:
+        soh = project_soh(vehicle.current_soh, trend.soh_loss_pct_per_year, years)
+        if soh <= 0 and years > 0:
+            break
+        response = _calculate(req, vehicle.model_copy(update={"current_soh": soh}))
+        points.append(
+            DegradationPoint(
+                years_ahead=years,
+                projected_soh_pct=soh,
+                projected_arrival_soc_pct=response.projected_arrival_soc_pct,
+                predicted_range_km=response.predicted_range_km,
+                risk_level=response.risk_level,
+            )
+        )
+
+    return DegradationResponse(
+        vehicle_id=vehicle.id,
+        basis=trend.basis,
+        soh_loss_pct_per_year=trend.soh_loss_pct_per_year,
+        readings_used=trend.readings_used,
+        span_days=trend.span_days,
+        points=points,
+    )

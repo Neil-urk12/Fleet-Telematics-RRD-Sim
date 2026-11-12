@@ -46,6 +46,9 @@ every listed capability exists in this repository.
   `ScenarioComparison.tsx` compares driving/HVAC/regen setups for the assessed vehicle
   (`POST /api/simulation/compare`: the submitted setup plus fixed presets; each setup is
   saved as an assessment; "Use this setup" only fills the form).
+  `DegradationOutlook.tsx` reruns the assessed trip at the SOH projected for 1, 2, 3 and 5
+  years ahead (`POST /api/simulation/degradation`; nothing is saved) and states whether the
+  loss rate is fitted to recorded SOH history or assumed.
   Route: playback controls, map, elevation/SOC, charging. A current planner result on the
   Manila → Baguio route (exact preset distance/ascent/descent) is replayed there: Simulate trip
   opens `#/route` and plays it, and the SOC curve keeps the backend's start and arrival SOC,
@@ -75,18 +78,21 @@ every listed capability exists in this repository.
 - `packages/api-client/` — Shared TypeScript types, typed HTTP client, and numeric
   route-input parsing/validation in `src/`. `check-*.mjs` are standalone
   `node:assert` checks for the shared client (reading age, fleet comparison, battery
-  history, saved-assessment history, setup comparison), run via `pnpm test:client`.
+  history, saved-assessment history, setup comparison, degradation projection), run via `pnpm test:client`.
 - `backend/` — FastAPI, Python 3.11, managed with `uv`.
   - `app/main.py` — CORS and routers under `/api/{vehicles,telemetry,simulation}`;
     `/api/health` health check.
   - `app/api/` — vehicle CRUD/history, telemetry single/batch ingestion and history,
-    simulation single/batch/comparison and saved-run history.
+    simulation single/batch/comparison, saved-run history and the unsaved degradation
+    projection.
   - `app/core/fleet_state.py` — shared, locked, process-local vehicle and telemetry
     stores; battery state ordering and provenance.
   - `app/core/persistence.py` — SQLite or Turso storage for vehicles, vehicle/telemetry history,
     and saved simulations; writes commit before changing the process-local caches.
   - `app/core/simulator.py` — `calculate_simulation(req, vehicle)` and route-energy
     calibration coefficients.
+  - `app/core/soh_projection.py` — SOH loss-rate fit over vehicle history and forward
+    projection, with its calibration constants.
   - `app/core/battery_history.py` — operational-history stress overlay and its
     calibration coefficients.
   - `app/schemas/` — Pydantic v2 validation and request/response models.
@@ -197,6 +203,11 @@ Vehicle profiles include positive `curb_mass_kg` (default 2500),
   range and arrival SOC low/high bands. `confidence_score_pct` is the normal-CDF chance
   of arriving at or above the reserve (band = 90% interval; 50 at exactly the reserve).
   Band fields are nullable for older saved runs. Recommendations and confidence remain heuristic.
+- The degradation projection uses a least-squares SOH loss rate (never negative) when the
+  vehicle's recorded history spans at least 30 days (`RECORDED`); otherwise an assumed
+  `2.0 %/yr × (1 + stress score / 100)` (`ASSUMED`). It changes only SOH: SOC, history
+  stress and the route inputs stay as submitted. Horizons whose projected SOH reaches 0
+  are omitted.
 
 These are PoC calibration assumptions, not measured OEM performance. No segment-order,
 battery headroom, or regen power-limit model is implemented. Calibrated uncertainty

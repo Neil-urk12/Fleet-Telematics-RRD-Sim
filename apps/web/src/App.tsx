@@ -13,6 +13,7 @@ import type { RoutePreset } from './components/RouteInputs';
 import { SimulationResult } from './components/SimulationResult';
 import { FleetComparison } from './components/FleetComparison';
 import { ScenarioComparison } from './components/ScenarioComparison';
+import { DegradationOutlook } from './components/DegradationOutlook';
 import { AssessmentHistory } from './components/AssessmentHistory';
 import { AssessmentDetail } from './components/AssessmentDetail';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
@@ -156,7 +157,7 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, runScenarioComparison, getSimulationHistory, getSimulationRecord, getVehicleHistory, historyVersion, createVehicle, updateVehicle, deleteVehicle } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, runScenarioComparison, runDegradationProjection, getSimulationHistory, getSimulationRecord, getVehicleHistory, historyVersion, createVehicle, updateVehicle, deleteVehicle } = useFleetData();
 
     const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
@@ -653,6 +654,12 @@ function App() {
                                     setHvacMode(setup.hvac_mode);
                                     setRegenLevel(setup.regen_level);
                                 }}
+                            />
+                            <DegradationOutlook
+                                assessment={assessment}
+                                isOutdated={assessmentOutdated}
+                                isConnected={dataStatus === 'live'}
+                                runProjection={runDegradationProjection}
                             />
                         </SimulationResult>
                     ) : (

@@ -5,6 +5,7 @@ import type {
   BatchTelemetryResponse,
   CompareSimulationRequest,
   CompareSimulationResponse,
+  DegradationResponse,
   FleetTelemetryResponse,
   SimulationRecord,
   SimulationRequest,
@@ -156,6 +157,14 @@ export class FleetApiClient {
 
   async compareSimulations(req: CompareSimulationRequest): Promise<CompareSimulationResponse> {
     return this.fetchJson<CompareSimulationResponse>("/api/simulation/compare", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
+  /** Projects the trip at future SOH; the backend saves nothing. */
+  async projectDegradation(req: SimulationRequest): Promise<DegradationResponse> {
+    return this.fetchJson<DegradationResponse>("/api/simulation/degradation", {
       method: "POST",
       body: JSON.stringify(req),
     });
