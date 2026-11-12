@@ -618,6 +618,7 @@ function App() {
                             onRegenLevelChange={setRegenLevel}
                             isSimulating={isSimulating}
                             onSubmit={handleRunSimulation}
+                            reportedAmbientTempC={dataStatus === 'live' ? selectedTelemetry?.ambient_temp_c : undefined}
                         />
                     </div>
                     {assessment ? (

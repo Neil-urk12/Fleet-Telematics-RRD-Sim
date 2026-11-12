@@ -61,7 +61,8 @@ every listed capability exists in this repository.
   coefficients, written out by hand; update it when `simulator.py`, `battery_history.py`
   or `soh_projection.py` change. It renders without a fleet or a backend.
   `src/components/RouteInputs.tsx` is the guided setup form (vehicle, numeric route
-  fields, road type, driving/HVAC/regen, submit); `ControlsBar.tsx` drives the route
+  fields, road type, driving/HVAC/regen, submit; with a live telemetry reading the
+  temperature field offers a "Use reported …°C" fill, never applied automatically); `ControlsBar.tsx` drives the route
   preview playback.
   `src/hooks/useFleetData.ts` polls vehicles/telemetry and runs simulations through
   the shared client. `AssessmentHistory.tsx` lists the selected vehicle's 10 newest saved

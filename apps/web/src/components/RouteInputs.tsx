@@ -109,6 +109,8 @@ interface RouteInputsProps {
     onRegenLevelChange: (regen: RegenLevel) => void;
     isSimulating: boolean;
     onSubmit: (parameters: SimulationNumericParameters & { road_type: RoadType }) => void;
+    /** Latest reported outside temperature for the selected vehicle; offered as a one-click fill. */
+    reportedAmbientTempC?: number;
 }
 
 export function RouteInputs({
@@ -128,6 +130,7 @@ export function RouteInputs({
     onRegenLevelChange,
     isSimulating,
     onSubmit,
+    reportedAmbientTempC,
 }: RouteInputsProps) {
     const [showErrors, setShowErrors] = useState(false);
     const { parameters, errors } = parseSimulationInputs(values);
@@ -258,6 +261,13 @@ export function RouteInputs({
                                         </span>
                                     ) : (
                                         <span id={`${field.key}-hint`} className="route-field-hint">{copy.hint}</span>
+                                    )}
+                                    {field.key === 'ambient_temp_c' && reportedAmbientTempC !== undefined
+                                        && (values.ambient_temp_c.trim() === '' || Number(values.ambient_temp_c) !== reportedAmbientTempC) && (
+                                        <button type="button" className="garage-open-btn"
+                                            onClick={() => onValuesChange({ ...values, ambient_temp_c: String(reportedAmbientTempC) })}>
+                                            Use reported {reportedAmbientTempC}°C
+                                        </button>
                                     )}
                                 </label>
                             );
