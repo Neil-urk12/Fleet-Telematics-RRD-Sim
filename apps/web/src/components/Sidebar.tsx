@@ -20,8 +20,8 @@ export function Sidebar({ page, dataStatus, lastFetchedAt }: SidebarProps) {
     return (
         <nav className="sidebar" aria-label="Main">
             <div className="sidebar-brand">
-                <span className="sidebar-title">EV Trip Range Checker</span>
-                <span className="sidebar-subtitle">Fleet telematics</span>
+                <span className="sidebar-title">Fleet Telematics</span>
+                <span className="sidebar-subtitle">EV range decision support</span>
             </div>
             <ul className="sidebar-nav">
                 {PAGES.map(p => (

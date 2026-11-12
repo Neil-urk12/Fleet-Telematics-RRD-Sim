@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="EV Fleet Telematics & RRD Simulation API",
+    title="Fleet Telematics API",
     version="1.0.0",
     lifespan=lifespan,
 )

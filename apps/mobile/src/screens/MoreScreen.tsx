@@ -191,7 +191,7 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({
       {/* App Info Footer */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          EV Fleet Telematics & RRD Sim • v1.0.0
+          Fleet Telematics • v1.0.0
         </Text>
         <Text style={styles.footerSub}>Mobile Monorepo • React Native & Expo</Text>
       </View>

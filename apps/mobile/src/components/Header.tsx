@@ -12,7 +12,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  title = "EV Fleet Telematics",
+  title = "Fleet Telematics",
   subtitle,
   showNavIcons = true,
   onPressMenu,

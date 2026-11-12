@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     # When set, the fleet store uses this Turso (libSQL) database instead of DATABASE_PATH.
     TURSO_DATABASE_URL: str = ""
     TURSO_AUTH_TOKEN: str = ""
-    PROJECT_NAME: str = "EV Fleet Telematics & RRD Simulation"
+    PROJECT_NAME: str = "Fleet Telematics"
     API_V1_STR: str = "/api"
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
