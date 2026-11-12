@@ -81,7 +81,8 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
             setHistoryVersion(v => v + 1);
         }
     }, []);
-    const getSimulationHistory = useCallback((vehicleId: string) => api.getSimulationHistory(vehicleId), []);
+    const getSimulationHistory = useCallback((vehicleId?: string) => api.getSimulationHistory(vehicleId), []);
+    const getSimulationRecord = useCallback((recordId: string) => api.getSimulationRecord(recordId), []);
     const getVehicleHistory = useCallback((vehicleId: string) => api.getVehicleHistory(vehicleId), []);
 
     // Errors (e.g. 409 duplicate ID) propagate so the form can show them next to the fields.
@@ -122,7 +123,7 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
         vehicles, telemetry, assessment, loading, error, simulationError, dataStatus,
         readingTime, lastFetchedAt, historyVersion,
         isSimulating, refetch: fetchData, runSimulation, runBatchSimulation, runScenarioComparison,
-        getSimulationHistory, getVehicleHistory,
+        getSimulationHistory, getSimulationRecord, getVehicleHistory,
         createVehicle, updateVehicle, deleteVehicle,
     };
 }

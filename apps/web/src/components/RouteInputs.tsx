@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { parseSimulationInputs, simulationNumericFields } from '@fleet/api-client';
 import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters, Vehicle } from '@fleet/api-client';
 
@@ -26,14 +28,15 @@ const levelLabel = (level: string) => level[0] + level.slice(1).toLowerCase();
 interface ChoiceGroupProps<T extends string> {
     legend: string;
     hint: string;
-    options: readonly { value: T; label: string }[];
+    options: readonly { value: T; label: ReactNode }[];
     value: T;
     onChange: (value: T) => void;
+    className?: string;
 }
 
-function ChoiceGroup<T extends string>({ legend, hint, options, value, onChange }: ChoiceGroupProps<T>) {
+function ChoiceGroup<T extends string>({ legend, hint, options, value, onChange, className = '' }: ChoiceGroupProps<T>) {
     return (
-        <fieldset className="choice-group">
+        <fieldset className={`choice-group ${className}`}>
             <legend>{legend}</legend>
             <div className="choice-options">
                 {options.map(option => (
@@ -52,6 +55,42 @@ function ChoiceGroup<T extends string>({ legend, hint, options, value, onChange 
         </fieldset>
     );
 }
+
+type StepId = 'vehicle' | 'trip' | 'driving';
+
+interface SetupStepProps {
+    id: StepId;
+    num: number;
+    title: string;
+    summary: ReactNode;
+    open: boolean;
+    onToggle: () => void;
+    children: ReactNode;
+}
+
+// A step whose header toggles it; when collapsed the header shows what is currently chosen.
+function SetupStep({ id, num, title, summary, open, onToggle, children }: SetupStepProps) {
+    return (
+        <section className={`setup-step ${open ? 'setup-step--open' : ''}`} aria-labelledby={`step-${id}`}>
+            <h3 id={`step-${id}`}>
+                <button type="button" className="setup-step-toggle" aria-expanded={open} aria-controls={`step-${id}-body`} onClick={onToggle}>
+                    <span className="step-num" aria-hidden="true">{num}</span>
+                    <span className="setup-step-title">{title}</span>
+                    {!open && <span className="setup-step-summary">{summary}</span>}
+                    <svg className="setup-step-chevron" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                        <path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </button>
+            </h3>
+            <div id={`step-${id}-body`} className="setup-step-body" hidden={!open}>{children}</div>
+        </section>
+    );
+}
+
+const ROAD_LABEL: Record<RoadType, string> = { URBAN: 'City', HIGHWAY: 'Highway', MIXED: 'Mixed' };
+const STYLE_LABEL: Record<DrivingStyle, string> = { ECO: 'Eco', NORMAL: 'Normal', AGGRESSIVE: 'Sporty' };
+// Step 1 holds no numeric fields; every validated field lives in step 2.
+const FIELD_STEP: StepId = 'trip';
 
 interface RouteInputsProps {
     vehicles: Vehicle[];
@@ -98,6 +137,10 @@ export function RouteInputs({
         && preset.gainM === parameters.elevation_gain_m
         && preset.lossM === parameters.elevation_loss_m
         && preset.roadType === roadType)?.label ?? '';
+    const [openSteps, setOpenSteps] = useState<Record<StepId, boolean>>({ vehicle: true, trip: false, driving: false });
+    const toggleStep = (step: StepId) => setOpenSteps(steps => ({ ...steps, [step]: !steps[step] }));
+    const selectedVehicle = vehicles.find(vehicle => vehicle.id === selectedVehicleId);
+    const errorCount = showErrors ? Object.keys(errors).length : 0;
 
     return (
         <form
@@ -107,10 +150,14 @@ export function RouteInputs({
             onSubmit={event => {
                 event.preventDefault();
                 setShowErrors(true);
-                if (parameters) onSubmit({ ...parameters, road_type: roadType });
-                else event.currentTarget.querySelector<HTMLInputElement>(
-                    `[name="${Object.keys(errors)[0]}"]`
-                )?.focus();
+                if (parameters) {
+                    onSubmit({ ...parameters, road_type: roadType });
+                    return;
+                }
+                // A collapsed step's inputs are hidden and cannot take focus, so open it first.
+                const form = event.currentTarget;
+                flushSync(() => setOpenSteps(steps => ({ ...steps, [FIELD_STEP]: true })));
+                form.querySelector<HTMLInputElement>(`[name="${Object.keys(errors)[0]}"]`)?.focus();
             }}
         >
             <div className="setup-header">
@@ -121,8 +168,14 @@ export function RouteInputs({
             </div>
 
             <div className="setup-steps">
-                <section className="setup-step" aria-labelledby="step-vehicle">
-                    <h3 id="step-vehicle"><span className="step-num" aria-hidden="true">1</span>Vehicle & route</h3>
+                <SetupStep
+                    id="vehicle" num={1} title="Vehicle & route"
+                    open={openSteps.vehicle} onToggle={() => toggleStep('vehicle')}
+                    summary={[
+                        selectedVehicle ? `${selectedVehicle.id} ${selectedVehicle.model}` : 'No vehicle chosen',
+                        activePreset,
+                    ].filter(Boolean).join(', ')}
+                >
                     <label className="route-field">
                         <span>Which vehicle?</span>
                         <select
@@ -148,7 +201,14 @@ export function RouteInputs({
                     <ChoiceGroup
                         legend="Start from an example trip"
                         hint="Fills distance, hills and road type. You can still edit them."
-                        options={presets.map(preset => ({ value: preset.label, label: preset.label }))}
+                        className="choice-group--presets"
+                        options={presets.map(preset => ({
+                            value: preset.label,
+                            label: <>
+                                <span>{preset.label}</span>
+                                <small>{preset.distanceKm.toLocaleString('en-US')} km, {preset.gainM.toLocaleString('en-US')} m up</small>
+                            </>,
+                        }))}
                         value={activePreset}
                         onChange={label => {
                             const preset = presets.find(p => p.label === label);
@@ -162,10 +222,16 @@ export function RouteInputs({
                             onRoadTypeChange(preset.roadType);
                         }}
                     />
-                </section>
+                </SetupStep>
 
-                <section className="setup-step" aria-labelledby="step-trip">
-                    <h3 id="step-trip"><span className="step-num" aria-hidden="true">2</span>Trip</h3>
+                <SetupStep
+                    id="trip" num={2} title="Trip"
+                    open={openSteps.trip} onToggle={() => toggleStep('trip')}
+                    summary={errorCount > 0
+                        ? <span className="route-field-error">{errorCount === 1 ? '1 field needs fixing' : `${errorCount} fields need fixing`}</span>
+                        : `${values.route_distance_km} km, ${values.elevation_gain_m} m up, ${values.elevation_loss_m} m down, `
+                            + `${values.ambient_temp_c}°C, ${values.payload_kg} kg, keep ${values.reserve_soc_target_pct}%, ${ROAD_LABEL[roadType]}`}
+                >
                     <div className="route-inputs-grid">
                         {simulationNumericFields.map(field => {
                             const error = showErrors ? errors[field.key] : undefined;
@@ -199,25 +265,24 @@ export function RouteInputs({
                         <label className="route-field">
                             <span>Road type</span>
                             <select value={roadType} onChange={event => onRoadTypeChange(event.target.value as RoadType)}>
-                                <option value="URBAN">City</option>
-                                <option value="HIGHWAY">Highway</option>
-                                <option value="MIXED">Mixed</option>
+                                {(Object.keys(ROAD_LABEL) as RoadType[]).map(road => (
+                                    <option key={road} value={road}>{ROAD_LABEL[road]}</option>
+                                ))}
                             </select>
                             <span className="route-field-hint">Mostly city, highway, or both</span>
                         </label>
                     </div>
-                </section>
+                </SetupStep>
 
-                <section className="setup-step" aria-labelledby="step-driving">
-                    <h3 id="step-driving"><span className="step-num" aria-hidden="true">3</span>Driving</h3>
+                <SetupStep
+                    id="driving" num={3} title="Driving"
+                    open={openSteps.driving} onToggle={() => toggleStep('driving')}
+                    summary={`${STYLE_LABEL[drivingStyle]} driving, A/C ${hvacMode.toLowerCase()}, recovery ${regenLevel.toLowerCase()}`}
+                >
                     <ChoiceGroup
                         legend="Driving style"
                         hint="Sporty driving drains the battery faster"
-                        options={[
-                            { value: 'ECO', label: 'Eco' },
-                            { value: 'NORMAL', label: 'Normal' },
-                            { value: 'AGGRESSIVE', label: 'Sporty' },
-                        ]}
+                        options={(Object.keys(STYLE_LABEL) as DrivingStyle[]).map(style => ({ value: style, label: STYLE_LABEL[style] }))}
                         value={drivingStyle}
                         onChange={onDrivingStyleChange}
                     />
@@ -235,7 +300,7 @@ export function RouteInputs({
                         value={regenLevel}
                         onChange={onRegenLevelChange}
                     />
-                </section>
+                </SetupStep>
             </div>
 
             <div className="setup-actions">

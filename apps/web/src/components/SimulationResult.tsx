@@ -1,5 +1,5 @@
 import { formatBatteryHistory, formatBatteryState, formatSimulationConditions, getSimulationEnergyBreakdown } from '@fleet/api-client';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { SimulationAssessment, SimulationResponse } from '@fleet/api-client';
 
 interface SimulationResultProps {
@@ -36,6 +36,48 @@ function getVerdict(result: SimulationResponse, reservePct: number) {
     };
 }
 
+const clampPct = (value: number) => Math.min(100, Math.max(0, value));
+
+// Battery bar from 0 to 100%: charge left on arrival, charge this trip uses, likely arrival range, safety margin.
+function ChargeRunway({ result, reservePct }: { result: SimulationResponse; reservePct: number }) {
+    const start = clampPct(result.starting_soc_pct);
+    const arrival = clampPct(result.projected_arrival_soc_pct);
+    const hasBand = result.arrival_soc_low_pct != null && result.arrival_soc_high_pct != null;
+    const low = clampPct(result.arrival_soc_low_pct ?? arrival);
+    const high = clampPct(result.arrival_soc_high_pct ?? arrival);
+    const arrivalText = result.projected_arrival_soc_pct < 0 ? 'empty' : `${Math.floor(result.projected_arrival_soc_pct)}%`;
+    // Each label sits at its value and shifts by the same share of its width, so it never overflows the bar ends.
+    const at = (pct: number) => ({ '--x': `${pct}%` } as CSSProperties);
+    return (
+        <figure className="charge-runway-figure">
+            <span className="charge-runway-label charge-runway-label--arrival" style={at(arrival)} aria-hidden="true">
+                Arrive <b>{arrivalText}</b>
+            </span>
+            <div
+                className="charge-runway"
+                role="img"
+                aria-label={`Leaves with ${Math.round(start)}% battery and arrives ${arrivalText}. Safety margin ${reservePct}%.`}
+                style={{
+                    '--start': `${start}%`, '--arrival': `${arrival}%`, '--reserve': `${clampPct(reservePct)}%`,
+                    '--low': `${low}%`, '--high': `${high}%`,
+                } as CSSProperties}
+            >
+                <span className="charge-runway-left" />
+                <span className="charge-runway-used" />
+                {hasBand && <span className="charge-runway-band" />}
+                <span className="charge-runway-reserve" />
+            </div>
+            <div className="charge-runway-below" aria-hidden="true">
+                <span className="charge-runway-label" style={at(clampPct(reservePct))}>{reservePct}% margin</span>
+                <span className="charge-runway-label" style={at(start)}>Leave <b>{Math.round(start)}%</b></span>
+            </div>
+            <figcaption className="charge-runway-legend">
+                Solid: left on arrival. Striped: used on this trip.{hasBand && ' Bracket: likely arrival range.'}
+            </figcaption>
+        </figure>
+    );
+}
+
 export function SimulationResult({ assessment, isOutdated, children }: SimulationResultProps) {
     const { request, response: result } = assessment;
     const breakdown = getSimulationEnergyBreakdown(result);
@@ -43,7 +85,7 @@ export function SimulationResult({ assessment, isOutdated, children }: Simulatio
     const verdict = getVerdict(result, request.reserve_soc_target_pct ?? 15);
 
     return (
-        <section className="assessment-result" aria-label={`Trip result for ${result.vehicle_id}`}>
+        <section className={`assessment-result assessment-result--${result.risk_level.toLowerCase()}`} aria-label={`Trip result for ${result.vehicle_id}`}>
             {isOutdated && (
                 <p className="assessment-outdated" role="status">
                     You changed something since this result. Press Simulate trip again to update it.
@@ -57,6 +99,9 @@ export function SimulationResult({ assessment, isOutdated, children }: Simulatio
                     <p className="assessment-note">{result.vehicle_id} · estimate from the backend model</p>
                 </div>
             </div>
+
+            {/* Keyed on the numbers so a changed result replays the drain animation. */}
+            <ChargeRunway key={`${result.vehicle_id}:${result.starting_soc_pct}:${result.projected_arrival_soc_pct}`} result={result} reservePct={request.reserve_soc_target_pct ?? 15} />
 
             <dl className="verdict-stats">
                 <div><dt>Battery on arrival</dt><dd>{result.projected_arrival_soc_pct < 0 ? 'Empty' : `${Math.floor(result.projected_arrival_soc_pct)}%`}</dd></div>

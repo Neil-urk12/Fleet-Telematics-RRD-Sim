@@ -17,10 +17,11 @@ interface ElevationChartProps {
     socData: SocPoint[];
     totalDistance: number;
     progressFraction?: number; // 0 to 1
+    resultNote?: string; // set when socData is fitted to a planner result instead of the demo estimate
 }
 
 // Interpolate value at arbitrary distance along data points
-function interpolateAtDistance(data: Array<{ distance: number; [key: string]: number }>, key: string, targetDist: number): number {
+export function interpolateAtDistance(data: Array<{ distance: number; [key: string]: number }>, key: string, targetDist: number): number {
     if (data.length === 0) return 0;
     if (targetDist <= data[0].distance) return data[0][key];
     if (targetDist >= data[data.length - 1].distance) return data[data.length - 1][key];
@@ -42,6 +43,7 @@ export function ElevationChart({
     socData,
     totalDistance,
     progressFraction = 0.5,
+    resultNote,
 }: ElevationChartProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [hoverPoint, setHoverPoint] = useState<{
@@ -276,7 +278,7 @@ export function ElevationChart({
     return (
         <div className="elevation-panel" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <div className="panel-header">
-                <h3 className="panel-title">HILLS &amp; BATTERY ALONG THE ROUTE (DEMO)</h3>
+                <h3 className="panel-title">HILLS &amp; BATTERY ALONG THE ROUTE {resultNote ? '(TRIP RESULT)' : '(DEMO)'}</h3>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <span className="panel-badge" style={{ color: 'var(--accent-cyan)' }}>
                         HEIGHT: {Math.round(currentElevation)} m
@@ -287,7 +289,7 @@ export function ElevationChart({
                 </div>
             </div>
 
-            <p className="assessment-note">Rough estimate for the Manila → Baguio demo route. Run your own trip in Trip planner.</p>
+            <p className="assessment-note">{resultNote ?? 'Rough estimate for the Manila → Baguio demo route. Run your own trip in Trip planner.'}</p>
 
             <canvas
                 ref={canvasRef}

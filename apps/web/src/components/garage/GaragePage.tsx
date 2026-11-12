@@ -19,9 +19,11 @@ interface GaragePageProps {
     onSelect: (vehicleId: string) => void;
     /** Adds a "New vehicle" bay: pick a known EV from the row, then register it. Omit when vehicles can't be created. */
     onCreate?: (payload: VehicleCreate) => Promise<Vehicle>;
+    /** IDs that saved assessments refer to; a new vehicle is never given one. */
+    retiredIds?: string[];
 }
 
-export function GaragePage({ vehicles, selectedId, onSelect, onCreate }: GaragePageProps) {
+export function GaragePage({ vehicles, selectedId, onSelect, onCreate, retiredIds }: GaragePageProps) {
     // The 3D cars are built from the fleet when the page mounts (plus any registered here); live SOC/SOH still refresh by ID below.
     const [roster, setRoster] = useState(vehicles);
     const [adding, setAdding] = useState(false);
@@ -189,7 +191,7 @@ export function GaragePage({ vehicles, selectedId, onSelect, onCreate }: GarageP
     const ident = showForm
         ? spec
             ? {
-                key: spec.model, marque: 'New vehicle', name: spec.model, tagline: 'Add an ID and name to register it.',
+                key: spec.model, marque: 'New vehicle', name: spec.model, tagline: 'Add a name to register it.',
                 chips: [BODY_LABEL[bodyFor(spec.model)], `${spec.battery_capacity_kwh} kWh`, `${spec.baseline_efficiency_wh_km} Wh/km`, `${spec.curb_mass_kg.toLocaleString('en-US')} kg`],
             }
             : {
@@ -260,7 +262,7 @@ export function GaragePage({ vehicles, selectedId, onSelect, onCreate }: GarageP
             <div className="garage-panels">
                 {showForm ? (
                     <aside className="garage-form" aria-label={`New vehicle, bay ${pad(roster.length + 1)}`}>
-                        <VehicleForm vehicles={vehicles} canSubmit editing={null} spec={spec} onCreate={onCreate} onCreated={handleCreated} />
+                        <VehicleForm vehicles={vehicles} retiredIds={retiredIds} canSubmit editing={null} spec={spec} onCreate={onCreate} onCreated={handleCreated} />
                     </aside>
                 ) : vehicle && <aside className="garage-sheet" aria-label="Vehicle sheet">
                     <div className="garage-sheet-h">

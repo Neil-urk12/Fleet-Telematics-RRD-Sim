@@ -5,6 +5,7 @@ export const PAGES = [
     { id: 'planner', label: 'Trip planner', icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' },
     { id: 'route', label: 'Route & charging', icon: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15' },
     { id: 'battery', label: 'Battery', icon: 'M2 7h16v10H2zM22 11v2M6 10v4M10 10v4' },
+    { id: 'history', label: 'History', icon: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2' },
 ] as const;
 
 export type PageId = typeof PAGES[number]['id'];

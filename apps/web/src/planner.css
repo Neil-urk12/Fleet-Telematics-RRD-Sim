@@ -1,0 +1,560 @@
+/* ══════════════════════════════════════════════════════════════════
+   TRIP PLANNER: setup column beside the result readout
+   Loaded after App.css; overrides its generic form/result rules here only.
+   ══════════════════════════════════════════════════════════════════ */
+.planner-layout {
+    --f-display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+    display: grid;
+    grid-template-columns: minmax(380px, 440px) minmax(0, 1fr);
+    gap: var(--space-lg);
+    align-items: start;
+}
+
+.planner-setup .route-inputs {
+    padding: var(--space-lg) var(--space-lg) 0;
+}
+
+.planner-setup .setup-steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin-top: var(--space-sm);
+}
+
+/* Steps read as one sequence divided by rules, not three boxes. */
+.planner-setup .setup-step {
+    padding: var(--space-lg) 0;
+    border: 0;
+    border-top: 1px solid var(--border-color);
+    border-radius: 0;
+    background: transparent;
+    gap: var(--space-md);
+}
+
+/* Collapsible steps: the header is the toggle; collapsed, it shows the current choices. */
+.planner-setup .setup-step h3 {
+    display: block;
+}
+
+.setup-step-toggle {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--space-sm);
+    row-gap: 2px;
+    align-items: center;
+    width: calc(100% + 2 * var(--space-sm));
+    margin: calc(-1 * var(--space-sm));
+    padding: var(--space-sm);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.setup-step-toggle:hover {
+    background: var(--bg-input);
+}
+
+.setup-step-toggle:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 0;
+}
+
+.setup-step-title {
+    grid-column: 2;
+}
+
+.setup-step-summary {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.setup-step-chevron {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    color: var(--text-secondary);
+    transition: rotate 0.15s;
+}
+
+.setup-step--open .setup-step-chevron {
+    rotate: 180deg;
+}
+
+.setup-step-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+}
+
+.setup-step-body[hidden] {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .setup-step-chevron {
+        transition: none;
+    }
+}
+
+.planner-setup .route-inputs-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-md);
+    row-gap: var(--space-lg);
+}
+
+/* Label, input and hint line up across each row even when a label wraps. */
+.planner-setup .route-inputs-grid > .route-field {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    row-gap: 4px;
+    align-items: end;
+}
+
+.planner-setup .route-inputs-grid > .route-field > :last-child {
+    align-self: start;
+}
+
+.planner-setup .route-inputs-grid > .route-field:last-child {
+    grid-column: 1 / -1;
+}
+
+/* ── Dropdowns ───────────────────────────────────────────────────── */
+/* Fallback for browsers without customizable select: at least keep the native list dark. */
+.planner-setup .route-field select option {
+    background-color: var(--bg-panel);
+    color: var(--text-primary);
+}
+
+@supports (appearance: base-select) {
+    .planner-setup .route-field select,
+    .planner-setup .route-field select::picker(select) {
+        appearance: base-select;
+    }
+
+    .planner-setup .route-field select {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: 0 12px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+    }
+
+    .planner-setup .route-field select:hover,
+    .planner-setup .route-field select:open {
+        border-color: var(--accent-cyan);
+    }
+
+    .planner-setup .route-field select::picker-icon {
+        color: var(--text-secondary);
+        transition: rotate 0.15s;
+    }
+
+    .planner-setup .route-field select:open::picker-icon {
+        rotate: 180deg;
+    }
+
+    .planner-setup .route-field select::picker(select) {
+        margin-top: 4px;
+        padding: 4px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-panel);
+        color: var(--text-primary);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .planner-setup .route-field select option {
+        padding: 9px 10px;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    .planner-setup .route-field select option:hover,
+    .planner-setup .route-field select option:focus-visible {
+        outline: none;
+        background: var(--bg-input);
+    }
+
+    .planner-setup .route-field select option:checked {
+        background: rgba(0, 194, 255, 0.12);
+        color: var(--accent-cyan);
+        font-weight: 600;
+    }
+
+    .planner-setup .route-field select option::checkmark {
+        color: var(--accent-cyan);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .planner-setup .route-field select::picker-icon {
+        transition: none;
+    }
+}
+
+/* Example trips: a list of routes, each with its distance and climb. */
+.choice-group--presets .choice-options {
+    flex-direction: column;
+}
+
+.choice-group--presets .choice-btn {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-md);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.choice-group--presets .choice-btn small {
+    flex: none;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.choice-group--presets .choice-btn--active small {
+    color: var(--text-secondary);
+}
+
+.planner-setup .setup-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin: 0 calc(-1 * var(--space-lg));
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+.planner-setup .simulate-btn {
+    flex: 1;
+}
+
+/* ── Result readout ───────────────────────────────────────────────── */
+.planner-layout .assessment-result {
+    padding: var(--space-xl);
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--verdict);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+}
+
+/* Same specificity as the rule above would let it win, so the default lives here instead. */
+.assessment-result { --verdict: var(--accent-cyan); }
+.assessment-result--safe { --verdict: var(--accent-green); }
+.assessment-result--caution { --verdict: var(--accent-yellow); }
+.assessment-result--not_recommended { --verdict: var(--accent-red); }
+
+.planner-layout .verdict {
+    padding: 0;
+    border: 0;
+    background: none;
+    align-items: center;
+}
+
+.planner-layout .verdict h2 {
+    font-family: var(--f-display);
+    font-size: 36px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--verdict);
+}
+
+.planner-layout .verdict p {
+    max-width: 62ch;
+}
+
+.planner-layout .verdict-mark {
+    width: 44px;
+    height: 44px;
+    color: var(--verdict);
+}
+
+/* The battery bar: 0–100% charge with a terminal nub on the right. */
+.charge-runway-figure {
+    margin: var(--space-xl) 0;
+}
+
+.charge-runway {
+    position: relative;
+    height: 36px;
+    margin-right: 8px;
+    border: 2px solid var(--text-muted);
+    border-radius: 6px;
+    background:
+        repeating-linear-gradient(to right, transparent 0 calc(10% - 1px), rgba(154, 168, 189, 0.18) calc(10% - 1px) 10%),
+        var(--bg-input);
+}
+
+.charge-runway::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -9px;
+    width: 5px;
+    height: 14px;
+    border-radius: 0 2px 2px 0;
+    background: var(--text-muted);
+    transform: translateY(-50%);
+}
+
+.charge-runway > span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+.charge-runway-left {
+    left: 0;
+    width: var(--arrival);
+    background: var(--verdict);
+    animation: runway-drain 0.9s cubic-bezier(0.3, 0, 0.2, 1) 0.15s backwards;
+}
+
+.charge-runway-used {
+    left: var(--arrival);
+    width: calc(var(--start) - var(--arrival));
+    background: repeating-linear-gradient(-45deg,
+        color-mix(in srgb, var(--verdict) 45%, transparent) 0 4px,
+        color-mix(in srgb, var(--verdict) 12%, transparent) 4px 8px);
+}
+
+.charge-runway > .charge-runway-band {
+    top: -8px;
+    bottom: -8px;
+    left: var(--low);
+    width: calc(var(--high) - var(--low));
+    min-width: 2px;
+    border: 2px solid var(--text-primary);
+    border-top: 0;
+    border-bottom: 0;
+}
+
+.charge-runway > .charge-runway-reserve {
+    top: -4px;
+    bottom: -4px;
+    left: var(--reserve);
+    border-left: 2px dashed var(--text-primary);
+}
+
+@keyframes runway-drain {
+    from { width: var(--start); }
+}
+
+.charge-runway-label {
+    display: block;
+    width: max-content;
+    margin-left: var(--x);
+    transform: translateX(calc(-1 * var(--x)));
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.charge-runway-label b {
+    font-family: var(--f-display);
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.charge-runway-label--arrival {
+    margin-bottom: 8px;
+}
+
+.charge-runway-label--arrival b {
+    font-size: 30px;
+    color: var(--verdict);
+}
+
+.charge-runway-below {
+    position: relative;
+    height: 28px;
+    margin: 10px 8px 0 0;
+}
+
+.charge-runway-below .charge-runway-label {
+    position: absolute;
+    left: 0;
+}
+
+.charge-runway-legend {
+    margin-top: var(--space-xs);
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Figures as one ruled row rather than separate tiles. */
+.planner-layout .verdict-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 var(--space-xl);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.planner-layout .verdict-stats > div {
+    flex: 0 1 auto;
+    padding: var(--space-md) 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+.planner-layout .verdict-stats {
+    column-gap: 40px;
+}
+
+.planner-layout .verdict-stats dd {
+    font-family: var(--f-display);
+    font-size: 28px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.planner-layout .assessment-result h3 {
+    font-size: 14px;
+    margin-bottom: var(--space-sm);
+}
+
+.planner-layout .assessment-recommendations {
+    max-width: 72ch;
+}
+
+/* Comparisons: two follow-up questions under the answer. */
+.planner-layout .fleet-comparison {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-lg);
+}
+
+.planner-layout .fleet-comparison h3 {
+    font-size: 16px;
+}
+
+.planner-layout .fleet-comparison .ctrl-btn {
+    min-height: 34px;
+    padding: 0 14px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.planner-layout .fleet-comparison > p {
+    color: var(--text-secondary);
+}
+
+.planner-layout .fleet-comparison-table {
+    min-width: 640px;
+    font-size: 13px;
+}
+
+.planner-layout .fleet-comparison-table thead th {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.planner-layout .fleet-comparison-table td {
+    font-variant-numeric: tabular-nums;
+}
+
+.planner-layout .fleet-comparison-table th p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Readable risk badges: sentence case at body size instead of 9px caps. */
+.planner-layout .risk-badge,
+.page-card .risk-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: lowercase;
+    white-space: nowrap;
+}
+
+.planner-layout .risk-badge::first-letter,
+.page-card .risk-badge::first-letter {
+    text-transform: uppercase;
+}
+
+/* ── Before the first run ─────────────────────────────────────────── */
+.planner-layout .assessment-result--empty {
+    color: var(--text-secondary);
+    border-top-color: var(--border-color);
+}
+
+.assessment-result--empty h2 {
+    margin-top: var(--space-lg);
+    font-family: var(--f-display);
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--text-secondary);
+}
+
+.planner-layout .assessment-result--empty p {
+    max-width: 48ch;
+    font-size: 14px;
+}
+
+.charge-runway--empty {
+    margin-top: var(--space-sm);
+    border-style: dashed;
+    background: transparent;
+}
+
+.charge-runway--empty::after {
+    background: var(--border-color);
+}
+
+@media (max-width: 1200px) {
+    .planner-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .planner-layout .verdict h2 {
+        font-size: 28px;
+    }
+
+    .planner-layout .verdict-stats {
+        column-gap: 28px;
+    }
+
+    .planner-layout .assessment-result {
+        padding: var(--space-lg);
+    }
+
+    .planner-setup .route-inputs-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .charge-runway-left {
+        animation: none;
+    }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LeafletMouseEvent, Map as LeafletMap } from 'leaflet';
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import type { TelemetryEvent } from '@fleet/api-client';
@@ -11,6 +11,7 @@ interface MapPanelProps {
     selectedVehicleId: string | null;
     selectedStationId?: string | null;
     progressFraction: number; // 0–1 how far along the route
+    previewSoc?: number; // battery % at the preview marker while replaying a planner result
     onSelectVehicle?: (id: string) => void;
     onSelectStation?: (stationId: string) => void;
     onProgressChange?: (progress: number) => void;
@@ -109,6 +110,7 @@ export function MapPanel({
     selectedVehicleId,
     selectedStationId,
     progressFraction = 0.5,
+    previewSoc,
     onSelectVehicle,
     onSelectStation,
     onProgressChange,
@@ -126,6 +128,13 @@ export function MapPanel({
             : [];
     });
     const unreported = vehicles.filter(v => !positioned.some(p => p.vehicle.id === v.id));
+
+    // Kept for the header's "show whole route" button, which sits outside the map.
+    const mapRef = useRef<LeafletMap | null>(null);
+    const attachMap = useCallback((map: LeafletMap | null) => {
+        labelMap(map);
+        mapRef.current = map;
+    }, []);
 
     // Full screen: the native API on the panel, or a fixed overlay where the API is missing.
     const panelRef = useRef<HTMLDivElement>(null);
@@ -161,6 +170,17 @@ export function MapPanel({
                     <button
                         type="button"
                         className="map-fullscreen-btn"
+                        aria-label="Show whole route"
+                        title="Show whole route"
+                        onClick={() => mapRef.current?.fitBounds(ROUTE_GEOMETRY, { padding: [16, 16] })}
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 2v4M12 18v4M2 12h4M18 12h4M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0" />
+                        </svg>
+                    </button>
+                    <button
+                        type="button"
+                        className="map-fullscreen-btn"
                         aria-label={isFull ? 'Exit full screen' : 'Show map full screen'}
                         title={isFull ? 'Exit full screen (Esc)' : 'Full screen'}
                         aria-pressed={isFull}
@@ -178,7 +198,7 @@ export function MapPanel({
                 boundsOptions={{ padding: [16, 16] }}
                 style={{ flex: 1, minHeight: 240, background: 'var(--bg-panel)' }}
                 attributionControl
-                ref={labelMap}
+                ref={attachMap}
             >
                 <FitToContainer full={isFull} />
                 <PanToSelection
@@ -241,8 +261,11 @@ export function MapPanel({
                     radius={6}
                     pathOptions={{ color: '#00c2ff', fillColor: '#ffffff', fillOpacity: 1, weight: 3 }}
                 >
-                    <Tooltip direction="bottom">
-                        Route preview · {(progressFraction * ROUTE_DISTANCE_KM).toFixed(1)} km (illustration)
+                    {/* Keyed: Leaflet reads `permanent` only when the tooltip is created. */}
+                    <Tooltip key={previewSoc == null ? 'preview' : 'trip'} direction="bottom" permanent={previewSoc != null}>
+                        {previewSoc == null
+                            ? `Route preview · ${(progressFraction * ROUTE_DISTANCE_KM).toFixed(1)} km (illustration)`
+                            : `Trip result · ${(progressFraction * ROUTE_DISTANCE_KM).toFixed(1)} km · ${previewSoc.toFixed(0)}% battery`}
                     </Tooltip>
                 </CircleMarker>
 

@@ -1,5 +1,6 @@
 import './App.css';
-import { lazy, Suspense, useState, useMemo, useEffect, useRef } from 'react';
+import './planner.css';
+import { lazy, Suspense, useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useFleetData } from './hooks/useFleetData';
 import { Sidebar, PAGES } from './components/Sidebar';
 import type { PageId } from './components/Sidebar';
@@ -13,10 +14,11 @@ import { SimulationResult } from './components/SimulationResult';
 import { FleetComparison } from './components/FleetComparison';
 import { ScenarioComparison } from './components/ScenarioComparison';
 import { AssessmentHistory } from './components/AssessmentHistory';
+import { AssessmentDetail } from './components/AssessmentDetail';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
-import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters, SimulationRequest } from '@fleet/api-client';
+import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationAssessment, SimulationNumericDraft, SimulationNumericParameters, SimulationRecord, SimulationRequest } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
-import { ElevationChart } from './components/ElevationChart';
+import { ElevationChart, interpolateAtDistance } from './components/ElevationChart';
 import { ThermalMap } from './components/ThermalMap';
 import { BatteryHealthChart } from './components/BatteryHealthChart';
 import { RegenBrakingPanel } from './components/RegenBrakingPanel';
@@ -42,13 +44,29 @@ const PAGE_DESCRIPTIONS: Record<PageId, string> = {
     vehicles: 'Register vehicles and browse the fleet.',
     planner: 'Check whether a vehicle can finish a trip with its reserve intact.',
     route: 'Manila → Baguio example route via Marcos Highway, elevation profile and sample charging stops.',
-    battery: 'Illustrative pack temperature and regen estimates, with reported SOH history.',
+    battery: 'Illustrative pack temperature, regen from your latest trip result, and reported SOH history.',
+    history: 'Saved trip assessments: open any run, replay it on the route map, or rerun it.',
     garage: 'Browse the fleet in 3D and register new vehicles.',
 };
 
+// Only trips matching the map's route can be replayed on it.
+const isMapRoute = (r: SimulationNumericParameters) => r.route_distance_km === ROUTE_DISTANCE_KM
+    && r.elevation_gain_m === ROUTE_ELEVATION.gain && r.elevation_loss_m === ROUTE_ELEVATION.loss;
+
 function readPage(): PageId {
-    const id = window.location.hash.replace(/^#\/?/, '');
+    const id = window.location.hash.replace(/^#\/?/, '').split('/')[0];
     return PAGES.find(p => p.id === id)?.id ?? 'dashboard';
+}
+
+// `#/history/<id>` opens one saved assessment.
+function readRecordId(): string | null {
+    const [id, recordId] = window.location.hash.replace(/^#\/?/, '').split('/');
+    if (id !== 'history' || !recordId) return null;
+    try {
+        return decodeURIComponent(recordId);
+    } catch {
+        return null; // a hand-typed malformed link shows the list instead
+    }
 }
 
 // Helper to compute physics-informed SOC curve along the route
@@ -95,9 +113,29 @@ function buildDynamicSocData(
         const remainingKwh = Math.max(0, currentCapacityKwh - cumulativeKwhUsed);
         const currentSocPct = Math.max(2, Math.min(100, (remainingKwh / batteryCapacityKwh) * 100));
 
-        return { distance, soc: currentSocPct };
+        return { distance, soc: currentSocPct, kwh: cumulativeKwhUsed };
     });
 }
+
+// The backend returns totals only: keep a run's start and arrival SOC and spread the drop along
+// the route in proportion to the local estimate's cumulative energy for that run's inputs.
+function fitTripCurve({ request, response }: SimulationAssessment) {
+    // Start SOC and capacity do not affect cumulative energy, only the efficiency and settings do.
+    const shape = buildDynamicSocData(100, 1, response.vehicle_profile?.baseline_efficiency_wh_km ?? 160,
+        request.driving_style, request.hvac_mode, request.regen_level, request.payload_kg);
+    const totalKwh = shape[shape.length - 1].kwh;
+    const { starting_soc_pct: start, projected_arrival_soc_pct: end } = response;
+    return shape.map(p => {
+        const used = totalKwh > 0 ? p.kwh / totalKwh : p.distance / ROUTE_DISTANCE_KM;
+        return { ...p, soc: Math.max(0, start + (end - start) * used) };
+    });
+}
+
+// Text for a replayed trip's chart note; negative arrival SOC reads as empty, as in the result.
+const tripNote = (label: string, { response }: SimulationAssessment) =>
+    `${label} ${response.vehicle_id}: starts at ${response.starting_soc_pct.toFixed(0)}% and arrives `
+    + `${response.projected_arrival_soc_pct < 0 ? 'empty' : `at ${response.projected_arrival_soc_pct.toFixed(0)}%`} (backend). `
+    + 'The curve between is a local estimate.';
 
 function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progressFraction: number): number[][] {
     const loadBonus = drivingStyle === 'AGGRESSIVE' ? 3.5 : drivingStyle === 'ECO' ? -1.0 : 0;
@@ -118,7 +156,7 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, runScenarioComparison, getSimulationHistory, getVehicleHistory, historyVersion, createVehicle, updateVehicle, deleteVehicle } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, runScenarioComparison, getSimulationHistory, getSimulationRecord, getVehicleHistory, historyVersion, createVehicle, updateVehicle, deleteVehicle } = useFleetData();
 
     const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
@@ -131,23 +169,50 @@ function App() {
     // Playback and vehicle controls
     const [isRunning, setIsRunning] = useState(true);
     const [speed, setSpeed] = useState(2);
-    const [progressFraction, setProgressFraction] = useState(0.48);
+    // A saved run's replay starts from Manila, also when its link is opened directly.
+    const [progressFraction, setProgressFraction] = useState(() => readRecordId() ? 0 : 0.48);
     const [drivingStyle, setDrivingStyle] = useState<DrivingStyle>('NORMAL');
     const [hvacMode, setHvacMode] = useState<HvacMode>('LOW');
     const [regenLevel, setRegenLevel] = useState<RegenLevel>('MEDIUM');
     // Hash routing (#/planner) keeps deep links and the back button working without a router dependency.
     const [page, setPage] = useState<PageId>(readPage);
+    const [recordId, setRecordId] = useState<string | null>(readRecordId);
     const headingRef = useRef<HTMLHeadingElement>(null);
     useEffect(() => {
         const onHashChange = () => {
             setPage(readPage());
+            const nextRecordId = readRecordId();
+            setRecordId(nextRecordId);
+            if (nextRecordId) { // a saved run's replay starts from Manila
+                setProgressFraction(0);
+                setIsRunning(true);
+            }
             headingRef.current?.focus(); // announce the new page to keyboard/screen-reader users
         };
         window.addEventListener('hashchange', onHashChange);
         return () => window.removeEventListener('hashchange', onHashChange);
     }, []);
+    // The saved run whose replay is on screen: set once it has loaded and only if it is on the map's route.
+    const [replayId, setReplayId] = useState<string | null>(null);
+    const handleRecordLoad = useCallback((record: SimulationRecord) => {
+        setReplayId(isMapRoute(record.request as Required<SimulationRequest>) ? record.id : null);
+    }, []);
     // The preview only animates where it is visible, so other pages don't re-render every frame.
-    const isAnimating = isRunning && (page === 'route' || page === 'battery');
+    const isAnimating = isRunning
+        && (page === 'route' || page === 'battery' || (recordId !== null && replayId === recordId));
+
+    // Vehicle IDs that saved runs refer to; the garage never assigns one of them to a new vehicle.
+    const [savedRunIds, setSavedRunIds] = useState<string[]>([]);
+    useEffect(() => {
+        if (page !== 'garage' || dataStatus !== 'live') return;
+        let cancelled = false;
+        getSimulationHistory().then(
+            records => { if (!cancelled) setSavedRunIds(records.map(r => r.request.vehicle_id)); },
+            // shortcut: if this fails only current fleet IDs are avoided, show an error if ID reuse is reported.
+            () => {},
+        );
+        return () => { cancelled = true; };
+    }, [page, dataStatus, getSimulationHistory]);
     const [routeValues, setRouteValues] = useState<SimulationNumericDraft>({
         route_distance_km: String(ROUTE_DISTANCE_KM),
         elevation_gain_m: String(ROUTE_ELEVATION.gain),
@@ -252,6 +317,28 @@ function App() {
         );
     }, [activeVehicle, drivingStyle, hvacMode, regenLevel, payload]);
 
+    // A current planner result for the map's own route can be played on it.
+    const liveTrip = assessment && !assessmentOutdated
+        && assessment.request.vehicle_id === selectedVehicleId && isMapRoute(assessment.request)
+        ? assessment : null;
+    const routeSocData = useMemo(() => liveTrip ? fitTripCurve(liveTrip) : socData, [liveTrip, socData]);
+    const previewSoc = page === 'route' && liveTrip
+        ? interpolateAtDistance(routeSocData, 'soc', progressFraction * ROUTE_DISTANCE_KM) : undefined;
+    // Opens the route map at Manila and plays the live planner result.
+    const playTrip = useCallback(() => {
+        setProgressFraction(0);
+        setIsRunning(true);
+        window.location.hash = '#/route';
+    }, []);
+    // Set when a Manila → Baguio run is submitted. Once it finishes it plays only if the user is still
+    // on the planner and the result still matches the form (liveTrip is null when it is outdated).
+    const playWhenDone = useRef(false);
+    useEffect(() => {
+        if (!playWhenDone.current || isSimulating) return;
+        playWhenDone.current = false;
+        if (liveTrip && page === 'planner') playTrip();
+    }, [isSimulating, liveTrip, page, playTrip]);
+
     // Compute pack thermal distribution
     const thermalGrid = useMemo(() => {
         return buildThermalGrid(selectedTelemetry?.pack_temp_c ?? 31.5, drivingStyle, progressFraction);
@@ -262,9 +349,11 @@ function App() {
     const avgTemp = allTemps.reduce((s, t) => s + t, 0) / allTemps.length;
 
     // ── Delegate simulation to backend via the hook ────────────────────
+    // A Manila → Baguio trip opens on the route map and plays; other trips stay in the planner.
     const handleRunSimulation = (parameters: SimulationNumericParameters & { road_type: RoadType }) => {
         if (!selectedVehicleId || isSimulating) return;
-        runSimulation({
+        playWhenDone.current = isMapRoute(parameters);
+        void runSimulation({
             ...parameters,
             vehicle_id: selectedVehicleId,
             driving_style: drivingStyle,
@@ -294,9 +383,9 @@ function App() {
     };
 
     // The fleet starts empty; planner, route and battery need a vehicle to show anything real.
-    // Vehicles, dashboard and garage render their own empty states.
+    // Vehicles, dashboard and garage render their own empty states; a saved run opens without one.
     const content = !loading && vehicles.length === 0 && page !== 'vehicles' && page !== 'dashboard' && page !== 'garage'
-        ? 'empty' : page;
+        && !(page === 'history' && recordId) ? 'empty' : page;
     const fleetEmpty = !loading && vehicles.length === 0;
     const openGarage = () => { window.location.hash = '#/garage'; };
 
@@ -317,22 +406,66 @@ function App() {
             selectedVehicleId={selectedVehicleId}
             selectedStationId={selectedStationId}
             progressFraction={progressFraction}
+            previewSoc={previewSoc}
             onSelectVehicle={setSelectedVehicleId}
             onSelectStation={setSelectedStationId}
             onProgressChange={setProgressFraction}
         />
     );
 
-    const assessmentHistory = selectedVehicleId && (
+    const renderHistory = (maxRows?: number) => selectedVehicleId && (
         <AssessmentHistory
             vehicleId={selectedVehicleId}
             refreshKey={historyVersion}
             loadHistory={getSimulationHistory}
-            onRerun={handleRerun}
-            rerunBlocked={dataStatus !== 'live' ? 'Reconnect to the backend to rerun this assessment.'
-                : isSimulating ? 'A simulation is already running.' : null}
+            maxRows={maxRows}
         />
     );
+    const assessmentHistory = renderHistory();
+
+    const controlsBar = (
+        <div className="page-card">
+            <ControlsBar
+                isRunning={isRunning}
+                onToggleRunning={() => setIsRunning(r => !r)}
+                speed={speed}
+                onSpeedChange={setSpeed}
+                onReset={() => setProgressFraction(0)}
+                progressFraction={progressFraction}
+                onProgressChange={setProgressFraction}
+                routeDistanceKm={ROUTE_DISTANCE_KM}
+            />
+        </div>
+    );
+
+    // A saved run played on the route map from its own result, not the vehicle's current state.
+    const renderReplay = (trip: SimulationAssessment) => {
+        if (!isMapRoute(trip.request)) return null;
+        const curve = fitTripCurve(trip); // ~140 points, cheap enough to rebuild each frame
+        return <>
+            {controlsBar}
+            <div className="page-grid page-grid--route page-grid--replay">
+                <MapPanel
+                    vehicles={vehicles}
+                    telemetry={telemetry}
+                    dataStatus={dataStatus}
+                    selectedVehicleId={trip.request.vehicle_id}
+                    selectedStationId={selectedStationId}
+                    progressFraction={progressFraction}
+                    previewSoc={interpolateAtDistance(curve, 'soc', progressFraction * ROUTE_DISTANCE_KM)}
+                    onSelectStation={setSelectedStationId}
+                    onProgressChange={setProgressFraction}
+                />
+                <ElevationChart
+                    elevationData={ELEVATION_PROFILE}
+                    socData={curve}
+                    totalDistance={ROUTE_DISTANCE_KM}
+                    progressFraction={progressFraction}
+                    resultNote={tripNote('Saved run for', trip)}
+                />
+            </div>
+        </>;
+    };
 
     return (
         <div className="app-shell">
@@ -344,7 +477,7 @@ function App() {
                         <h1 ref={headingRef} tabIndex={-1}>{PAGES.find(p => p.id === page)?.label}</h1>
                         <p>{PAGE_DESCRIPTIONS[page]}</p>
                     </div>
-                    {(content === 'route' || content === 'battery') && vehiclePicker}
+                    {(content === 'route' || content === 'battery' || (content === 'history' && !recordId)) && vehiclePicker}
                 </header>
 
                 {/* ── Backend status banners ────────────────────────────────── */}
@@ -427,6 +560,7 @@ function App() {
                             selectedId={selectedVehicleId}
                             onSelect={setSelectedVehicleId}
                             onCreate={dataStatus === 'live' ? createVehicle : undefined}
+                            retiredIds={savedRunIds}
                         />
                     </Suspense>
                 ))}
@@ -462,7 +596,8 @@ function App() {
                             Simulation unavailable: {simulationError}
                         </div>
                     )}
-                    <div className="page-card">
+                    <div className="planner-layout">
+                    <div className="page-card planner-setup">
                         <RouteInputs
                             vehicles={vehicles}
                             selectedVehicleId={selectedVehicleId}
@@ -482,11 +617,18 @@ function App() {
                             onSubmit={handleRunSimulation}
                         />
                     </div>
-                    {assessment && (
+                    {assessment ? (
                         <SimulationResult
                             assessment={assessment}
                             isOutdated={assessmentOutdated}
                         >
+                            {liveTrip ? (
+                                <button type="button" className="simulate-btn" onClick={() => playTrip()}>
+                                    Play this trip on the route map
+                                </button>
+                            ) : !assessmentOutdated && (
+                                <p className="assessment-note">Only the Manila → Baguio trip can be played on the route map.</p>
+                            )}
                             <FleetComparison
                                 assessment={assessment}
                                 currentRequest={currentRequest}
@@ -513,30 +655,39 @@ function App() {
                                 }}
                             />
                         </SimulationResult>
+                    ) : (
+                        <section className="assessment-result assessment-result--empty" aria-label="Trip result">
+                            <div className="charge-runway charge-runway--empty" aria-hidden="true" />
+                            <h2>No result yet</h2>
+                            <p>Set up the trip, then press Simulate trip. The result shows how much battery is left on arrival.</p>
+                        </section>
                     )}
+                    </div>
                     <div className="page-card">{assessmentHistory}</div>
                 </>}
 
+                {content === 'history' && (recordId ? (
+                    <AssessmentDetail
+                        recordId={recordId}
+                        loadRecord={getSimulationRecord}
+                        onLoad={handleRecordLoad}
+                        onRerun={handleRerun}
+                        rerunBlocked={dataStatus !== 'live' ? 'Reconnect to the backend to rerun this assessment.'
+                            : isSimulating ? 'A simulation is already running.' : null}
+                        renderReplay={renderReplay}
+                    />
+                ) : <div className="page-card">{renderHistory(Infinity)}</div>)}
+
                 {content === 'route' && <>
-                    <div className="page-card">
-                        <ControlsBar
-                            isRunning={isRunning}
-                            onToggleRunning={() => setIsRunning(r => !r)}
-                            speed={speed}
-                            onSpeedChange={setSpeed}
-                            onReset={() => setProgressFraction(0)}
-                            progressFraction={progressFraction}
-                            onProgressChange={setProgressFraction}
-                            routeDistanceKm={ROUTE_DISTANCE_KM}
-                        />
-                    </div>
+                    {controlsBar}
                     <div className="page-grid page-grid--route">
                         {mapPanel}
                         <ElevationChart
                             elevationData={ELEVATION_PROFILE}
-                            socData={socData}
+                            socData={routeSocData}
                             totalDistance={ROUTE_DISTANCE_KM}
                             progressFraction={progressFraction}
+                            resultNote={liveTrip ? tripNote('Your Trip planner result for', liveTrip) : undefined}
                         />
                         <ChargingPanel
                             vehicles={vehicles}
@@ -566,9 +717,8 @@ function App() {
                             loadHistory={getVehicleHistory}
                         />
                         <RegenBrakingPanel
-                            vehicles={vehicles}
-                            selectedVehicleId={selectedVehicleId}
-                            regenLevel={regenLevel}
+                            vehicleId={selectedVehicleId}
+                            assessment={assessment && !assessmentOutdated ? assessment : null}
                         />
                     </div>
                 )}

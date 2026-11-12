@@ -166,6 +166,10 @@ export class FleetApiClient {
     return this.fetchJson<SimulationRecord[]>(`/api/simulation/history${query}`);
   }
 
+  async getSimulationRecord(recordId: string): Promise<SimulationRecord> {
+    return this.fetchJson<SimulationRecord>(`/api/simulation/${encodeURIComponent(recordId)}`);
+  }
+
   // Health
   async checkHealth(): Promise<{ status: string }> {
     return this.fetchJson<{ status: string }>("/api/health");

@@ -5,7 +5,7 @@ import { formatEvSpecs } from '../evModels';
 import type { EvModel } from '../evModels';
 
 const TEXT_FIELDS = [
-    { key: 'id', label: 'Vehicle ID', hint: 'Unique, e.g. EV-101' },
+    { key: 'id', label: 'Vehicle ID', hint: 'Assigned automatically; telemetry devices report under this ID' },
     { key: 'name', label: 'Name', hint: 'Display name, e.g. Delivery van 1' },
     { key: 'model', label: 'Make & model', hint: 'e.g. Tesla Model 3' },
 ] as const;
@@ -34,6 +34,19 @@ const EMPTY_DRAFT: Draft = {
     current_soc: '80', current_soh: '100', curb_mass_kg: '2500', regen_efficiency: '0.6',
 };
 
+// Next free ID after the highest-numbered one, keeping its prefix and padding
+// (EV-006 → EV-007); EV-001 for a fleet with no numbered IDs.
+function nextVehicleId(ids: string[]): string {
+    let prefix = 'EV-', n = 0, width = 3;
+    for (const id of ids) {
+        const m = /^(.*?)(\d+)$/.exec(id);
+        if (m && Number(m[2]) >= n) [prefix, n, width] = [m[1], Number(m[2]), m[2].length];
+    }
+    let next: string;
+    do next = prefix + String(++n).padStart(width, '0'); while (ids.includes(next));
+    return next;
+}
+
 // curb_mass_kg and regen_efficiency are optional in the shared type; the backend fills defaults.
 const numberOf = (v: Vehicle, key: NumberKey) => v[key] ?? Number(EMPTY_DRAFT[key]);
 
@@ -60,6 +73,8 @@ function validateVehicleDraft(draft: Draft, takenIds: string[]): Partial<Record<
 
 interface VehicleFormProps {
     vehicles: Vehicle[];
+    /** Add mode: IDs of deleted vehicles that saved assessments still refer to, so they are not reassigned. */
+    retiredIds?: string[];
     canSubmit: boolean;
     /** The vehicle being edited (render with `key={editing?.id}` so the form resets per vehicle). */
     editing: Vehicle | null;
@@ -72,7 +87,7 @@ interface VehicleFormProps {
     onStopEditing?: () => void;
 }
 
-export function VehicleForm({ vehicles, canSubmit, editing, spec, onCreate, onUpdate, onCreated, onStopEditing }: VehicleFormProps) {
+export function VehicleForm({ vehicles, retiredIds = [], canSubmit, editing, spec, onCreate, onUpdate, onCreated, onStopEditing }: VehicleFormProps) {
     // Edits are compared with the vehicle as it was when editing began, so telemetry
     // arriving meanwhile is never overwritten by fields the user did not touch.
     const [baseline, setBaseline] = useState(editing);
@@ -82,9 +97,12 @@ export function VehicleForm({ vehicles, canSubmit, editing, spec, onCreate, onUp
     const [submitting, setSubmitting] = useState(false);
     const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
     // Without a picked model the hidden spec fields stay blank and fail validation with it.
-    const values: Draft = !baseline && spec
-        ? { ...draft, ...Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, String(v)])) }
-        : draft;
+    const values: Draft = baseline ? draft : {
+        ...draft,
+        // Saved runs are looked up by ID, so reusing a deleted vehicle's ID would show its runs as this one's.
+        id: nextVehicleId([...vehicles.map(v => v.id), ...retiredIds]),
+        ...(spec && Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, String(v)]))),
+    };
     const errors = validateVehicleDraft(values, vehicles.map(v => v.id).filter(id => id !== baseline?.id));
 
     const changes = (base: Vehicle): VehicleUpdate => {
@@ -140,24 +158,32 @@ export function VehicleForm({ vehicles, canSubmit, editing, spec, onCreate, onUp
 
     const field = (key: FieldKey, label: string, hint: string, numeric: boolean) => {
         const error = showErrors ? errors[key] : undefined;
-        const locked = key === 'id' && !!baseline;
+        const locked = key === 'id';
         return (
             <label className={`route-field route-field--${key}`} key={key}>
                 <span>{label}</span>
-                <input
-                    type="text"
-                    inputMode={numeric ? 'decimal' : 'text'}
-                    name={key}
-                    value={draft[key]}
-                    required
-                    readOnly={locked}
-                    aria-invalid={!!error}
-                    aria-describedby={`${key}-${error ? 'error' : 'hint'}`}
-                    onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
-                />
+                <span className={locked ? 'route-field-locked' : 'route-field-control'}>
+                    <input
+                        type="text"
+                        inputMode={numeric ? 'decimal' : 'text'}
+                        name={key}
+                        value={key === 'id' ? values.id : draft[key]}
+                        required
+                        readOnly={locked}
+                        tabIndex={locked ? -1 : undefined}
+                        aria-invalid={!!error}
+                        aria-describedby={`${key}-${error ? 'error' : 'hint'}`}
+                        onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
+                    />
+                    {locked && (
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                            <path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    )}
+                </span>
                 {error
                     ? <span id={`${key}-error`} className="route-field-error" role="alert">{error}</span>
-                    : <span id={`${key}-hint`} className="route-field-hint">{locked ? "IDs can't be changed" : hint}</span>}
+                    : <span id={`${key}-hint`} className="route-field-hint">{locked && baseline ? "IDs can't be changed" : hint}</span>}
             </label>
         );
     };

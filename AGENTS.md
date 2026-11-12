@@ -18,7 +18,7 @@ every listed capability exists in this repository.
 
 - `apps/web/` — React 19 dashboard. `src/App.tsx` holds shared state and renders a
   `Sidebar.tsx` plus hash-routed pages (`#/dashboard` default, `#/vehicles`, `#/garage`,
-  `#/planner`, `#/route`, `#/battery`; no router dependency). Vehicles, onboarding and the
+  `#/planner`, `#/route`, `#/battery`, `#/history`; no router dependency). Vehicles, onboarding and the
   planner also link to `#/garage`. Dashboard: `FleetSummary.tsx` KPI tiles
   and status breakdown, map, fleet list, saved assessments. Vehicles: an "Open garage"
   card (the edit form while editing) and `VehicleActions` (edit, delete with inline
@@ -33,7 +33,8 @@ every listed capability exists in this repository.
   names fall back to two generic bodies; not exact replicas). Picking a model puts it on
   the lift and supplies model, battery capacity, efficiency and curb mass to the
   `VehicleForm.tsx` add form (`spec` prop; regen keeps its 0.60 default); the form
-  only asks for ID, name, status, SOC and SOH. The edit form keeps every spec editable.
+  only asks for ID (read-only, assigned as the next free one, e.g. `EV-007`; shown because
+  telemetry reports under it), name, status, SOC and SOH. The edit form keeps every spec editable.
   A created car is built with `garage.add()` in its preview's paint and raised on the
   lift without rebuilding the scene. Edits PATCH only the fields changed since editing began, so
   untouched SOC/SOH never overwrite newer telemetry or switch its provenance to manual. With an empty live fleet the
@@ -45,8 +46,11 @@ every listed capability exists in this repository.
   `ScenarioComparison.tsx` compares driving/HVAC/regen setups for the assessed vehicle
   (`POST /api/simulation/compare`: the submitted setup plus fixed presets; each setup is
   saved as an assessment; "Use this setup" only fills the form).
-  Route: playback controls, map, elevation/SOC, charging. Battery: thermal, SOH history,
-  regen. `BatteryHealthChart.tsx` plots the selected vehicle's recorded SOH from
+  Route: playback controls, map, elevation/SOC, charging. A current planner result on the
+  Manila → Baguio route (exact preset distance/ascent/descent) is replayed there: Simulate trip
+  opens `#/route` and plays it, and the SOC curve keeps the backend's start and arrival SOC,
+  spread by the local estimate's cumulative energy. Battery: thermal, SOH history, regen
+  (`RegenBrakingPanel.tsx` shows the current planner result's recovered regen energy). `BatteryHealthChart.tsx` plots the selected vehicle's recorded SOH from
   `GET /api/vehicles/{id}/history`, reloading when its battery state timestamp changes; the
   fixed `EV-001`–`EV-006` example curves appear only in offline demo mode, labelled
   illustrative. Playback only animates on the route and battery pages.
@@ -56,10 +60,13 @@ every listed capability exists in this repository.
   `src/hooks/useFleetData.ts` polls vehicles/telemetry and runs simulations through
   the shared client. `AssessmentHistory.tsx` lists the selected vehicle's 10 newest saved
   backend assessments (including fleet-comparison batch runs) and reloads after each single
-  or batch run; it shows an "unavailable" alert when the backend is unreachable. "Open" shows
-  a row's full result (from the loaded list; `GET /api/simulation/{record_id}` is unused) and
-  "Rerun with these inputs" loads the saved request into the planner form and runs it
-  against the vehicle's current battery state as a new saved run. `src/mockData.ts` supplies demo data. `src/routeData.ts` is the
+  or batch run; it shows an "unavailable" alert when the backend is unreachable. `#/history`
+  shows the same table without the 10-row limit. Clicking a row (or its date link) opens `#/history/<id>`
+  (`AssessmentDetail.tsx`, loaded with `GET /api/simulation/{record_id}`): the full saved
+  result, its own map and SOC-chart replay from the saved result (Manila → Baguio runs only,
+  independent of the vehicle's current state), and "Rerun with these inputs", which loads the
+  saved request into the planner form and runs it against the vehicle's current battery
+  state as a new saved run. `src/mockData.ts` supplies demo data. `src/routeData.ts` is the
   generated Manila → Baguio dataset (do not edit by hand) that feeds the Leaflet map in
   `MapPanel.tsx`, the elevation chart, the example trip, and the sample charging stations.
 - `apps/mobile/` — React Native / Expo SDK 57. `App.tsx` handles backend access and an
