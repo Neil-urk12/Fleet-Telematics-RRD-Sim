@@ -18,7 +18,7 @@ every listed capability exists in this repository.
 
 - `apps/web/` — React 19 dashboard. `src/App.tsx` holds shared state and renders a
   `Sidebar.tsx` plus hash-routed pages (`#/dashboard` default, `#/vehicles`, `#/garage`,
-  `#/planner`, `#/route`, `#/battery`, `#/history`; no router dependency). Vehicles, onboarding and the
+  `#/planner`, `#/route`, `#/battery`, `#/history`, `#/docs`; no router dependency). Vehicles, onboarding and the
   planner also link to `#/garage`. Dashboard: `FleetSummary.tsx` KPI tiles
   and status breakdown, map, fleet list, saved assessments. Vehicles: an "Open garage"
   card (the edit form while editing) and `VehicleActions` (edit, delete with inline
@@ -57,6 +57,9 @@ every listed capability exists in this repository.
   `GET /api/vehicles/{id}/history`, reloading when its battery state timestamp changes; the
   fixed `EV-001`–`EV-006` example curves appear only in offline demo mode, labelled
   illustrative. Playback only animates on the route and battery pages.
+  Docs: `DocsPage.tsx` is a static glossary and the backend model's formulas and
+  coefficients, written out by hand; update it when `simulator.py`, `battery_history.py`
+  or `soh_projection.py` change. It renders without a fleet or a backend.
   `src/components/RouteInputs.tsx` is the guided setup form (vehicle, numeric route
   fields, road type, driving/HVAC/regen, submit); `ControlsBar.tsx` drives the route
   preview playback.

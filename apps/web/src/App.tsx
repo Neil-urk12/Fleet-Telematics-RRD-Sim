@@ -14,6 +14,7 @@ import { SimulationResult } from './components/SimulationResult';
 import { FleetComparison } from './components/FleetComparison';
 import { ScenarioComparison } from './components/ScenarioComparison';
 import { DegradationOutlook } from './components/DegradationOutlook';
+import { DocsPage } from './components/DocsPage';
 import { AssessmentHistory } from './components/AssessmentHistory';
 import { AssessmentDetail } from './components/AssessmentDetail';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
@@ -48,6 +49,7 @@ const PAGE_DESCRIPTIONS: Record<PageId, string> = {
     battery: 'Illustrative pack temperature, regen from your latest trip result, and reported SOH history.',
     history: 'Saved trip assessments: open any run, replay it on the route map, or rerun it.',
     garage: 'Browse the fleet in 3D and register new vehicles.',
+    docs: 'Glossary of terms and the formulas behind every trip assessment.',
 };
 
 // Only trips matching the map's route can be replayed on it.
@@ -385,7 +387,7 @@ function App() {
 
     // The fleet starts empty; planner, route and battery need a vehicle to show anything real.
     // Vehicles, dashboard and garage render their own empty states; a saved run opens without one.
-    const content = !loading && vehicles.length === 0 && page !== 'vehicles' && page !== 'dashboard' && page !== 'garage'
+    const content = !loading && vehicles.length === 0 && page !== 'vehicles' && page !== 'dashboard' && page !== 'garage' && page !== 'docs'
         && !(page === 'history' && recordId) ? 'empty' : page;
     const fleetEmpty = !loading && vehicles.length === 0;
     const openGarage = () => { window.location.hash = '#/garage'; };
@@ -684,6 +686,8 @@ function App() {
                         renderReplay={renderReplay}
                     />
                 ) : <div className="page-card">{renderHistory(Infinity)}</div>)}
+
+                {content === 'docs' && <DocsPage />}
 
                 {content === 'route' && <>
                     {controlsBar}

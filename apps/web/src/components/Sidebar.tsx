@@ -6,6 +6,7 @@ export const PAGES = [
     { id: 'route', label: 'Route & charging', icon: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15' },
     { id: 'battery', label: 'Battery', icon: 'M2 7h16v10H2zM22 11v2M6 10v4M10 10v4' },
     { id: 'history', label: 'History', icon: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2' },
+    { id: 'docs', label: 'Docs', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5' },
 ] as const;
 
 export type PageId = typeof PAGES[number]['id'];
