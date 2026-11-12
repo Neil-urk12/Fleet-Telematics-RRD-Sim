@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createFleetClient } from '@fleet/api-client';
-import type { BatchSimulationRequest, Vehicle, VehicleCreate, VehicleUpdate, TelemetryEvent, SimulationAssessment, SimulationRequest } from '@fleet/api-client';
+import type { BatchSimulationRequest, CompareSimulationRequest, Vehicle, VehicleCreate, VehicleUpdate, TelemetryEvent, SimulationAssessment, SimulationRequest } from '@fleet/api-client';
 import { MOCK_VEHICLES, MOCK_TELEMETRY } from '../mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -72,7 +72,17 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
         setHistoryVersion(v => v + 1);
         return response;
     }, []);
+    // The backend saves every compared setup, so the history panel reloads here too,
+    // also after a failure: earlier setups may already be saved.
+    const runScenarioComparison = useCallback(async (req: CompareSimulationRequest) => {
+        try {
+            return await api.compareSimulations(req);
+        } finally {
+            setHistoryVersion(v => v + 1);
+        }
+    }, []);
     const getSimulationHistory = useCallback((vehicleId: string) => api.getSimulationHistory(vehicleId), []);
+    const getVehicleHistory = useCallback((vehicleId: string) => api.getVehicleHistory(vehicleId), []);
 
     // Errors (e.g. 409 duplicate ID) propagate so the form can show them next to the fields.
     const createVehicle = useCallback(async (payload: VehicleCreate) => {
@@ -111,7 +121,8 @@ export function useFleetData(pollingIntervalMs: number = 5000) {
     return {
         vehicles, telemetry, assessment, loading, error, simulationError, dataStatus,
         readingTime, lastFetchedAt, historyVersion,
-        isSimulating, refetch: fetchData, runSimulation, runBatchSimulation, getSimulationHistory,
+        isSimulating, refetch: fetchData, runSimulation, runBatchSimulation, runScenarioComparison,
+        getSimulationHistory, getVehicleHistory,
         createVehicle, updateVehicle, deleteVehicle,
     };
 }

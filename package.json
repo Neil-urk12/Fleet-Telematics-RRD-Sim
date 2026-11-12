@@ -16,6 +16,6 @@
     "test:soak": "k6 run k6/soak-test.js",
     "test:telemetry": "k6 run k6/telemetry-load.js",
     "test:batch-sim": "k6 run k6/batch-simulation-test.js",
-    "test:client": "node packages/api-client/check-reading-age.mjs && node packages/api-client/check-fleet-comparison.mjs && node packages/api-client/check-battery-history.mjs && node packages/api-client/check-simulation-history.mjs"
+    "test:client": "node packages/api-client/check-reading-age.mjs && node packages/api-client/check-fleet-comparison.mjs && node packages/api-client/check-battery-history.mjs && node packages/api-client/check-simulation-history.mjs && node packages/api-client/check-simulation-compare.mjs"
   }
 }

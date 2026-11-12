@@ -41,15 +41,25 @@ every listed capability exists in this repository.
   and `FleetOnboarding` (in `FleetSummary.tsx`) lists the first-vehicle steps and navigates
   to `#/garage`. Planner, route and
   battery show a generic "add a vehicle" empty state. Planner: route form, result, history.
+  Under a result, `FleetComparison.tsx` compares available vehicles (batch) and
+  `ScenarioComparison.tsx` compares driving/HVAC/regen setups for the assessed vehicle
+  (`POST /api/simulation/compare`: the submitted setup plus fixed presets; each setup is
+  saved as an assessment; "Use this setup" only fills the form).
   Route: playback controls, map, elevation/SOC, charging. Battery: thermal, SOH history,
-  regen. Playback only animates on the route and battery pages.
+  regen. `BatteryHealthChart.tsx` plots the selected vehicle's recorded SOH from
+  `GET /api/vehicles/{id}/history`, reloading when its battery state timestamp changes; the
+  fixed `EV-001`–`EV-006` example curves appear only in offline demo mode, labelled
+  illustrative. Playback only animates on the route and battery pages.
   `src/components/RouteInputs.tsx` is the guided setup form (vehicle, numeric route
   fields, road type, driving/HVAC/regen, submit); `ControlsBar.tsx` drives the route
   preview playback.
   `src/hooks/useFleetData.ts` polls vehicles/telemetry and runs simulations through
   the shared client. `AssessmentHistory.tsx` lists the selected vehicle's 10 newest saved
   backend assessments (including fleet-comparison batch runs) and reloads after each single
-  or batch run; it shows an "unavailable" alert when the backend is unreachable. `src/mockData.ts` supplies demo data. `src/routeData.ts` is the
+  or batch run; it shows an "unavailable" alert when the backend is unreachable. "Open" shows
+  a row's full result (from the loaded list; `GET /api/simulation/{record_id}` is unused) and
+  "Rerun with these inputs" loads the saved request into the planner form and runs it
+  against the vehicle's current battery state as a new saved run. `src/mockData.ts` supplies demo data. `src/routeData.ts` is the
   generated Manila → Baguio dataset (do not edit by hand) that feeds the Leaflet map in
   `MapPanel.tsx`, the elevation chart, the example trip, and the sample charging stations.
 - `apps/mobile/` — React Native / Expo SDK 57. `App.tsx` handles backend access and an
@@ -58,7 +68,7 @@ every listed capability exists in this repository.
 - `packages/api-client/` — Shared TypeScript types, typed HTTP client, and numeric
   route-input parsing/validation in `src/`. `check-*.mjs` are standalone
   `node:assert` checks for the shared client (reading age, fleet comparison, battery
-  history, saved-assessment history), run via `pnpm test:client`.
+  history, saved-assessment history, setup comparison), run via `pnpm test:client`.
 - `backend/` — FastAPI, Python 3.11, managed with `uv`.
   - `app/main.py` — CORS and routers under `/api/{vehicles,telemetry,simulation}`;
     `/api/health` health check.

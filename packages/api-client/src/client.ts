@@ -3,6 +3,8 @@ import type {
   BatchSimulationResponse,
   BatchTelemetryRequest,
   BatchTelemetryResponse,
+  CompareSimulationRequest,
+  CompareSimulationResponse,
   FleetTelemetryResponse,
   SimulationRecord,
   SimulationRequest,
@@ -147,6 +149,13 @@ export class FleetApiClient {
 
   async runBatchSimulation(req: BatchSimulationRequest): Promise<BatchSimulationResponse> {
     return this.fetchJson<BatchSimulationResponse>("/api/simulation/batch", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
+  async compareSimulations(req: CompareSimulationRequest): Promise<CompareSimulationResponse> {
+    return this.fetchJson<CompareSimulationResponse>("/api/simulation/compare", {
       method: "POST",
       body: JSON.stringify(req),
     });

@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import type { SimulationRecord } from '@fleet/api-client';
+import type { SimulationRecord, SimulationRequest } from '@fleet/api-client';
+import { SimulationResult } from './SimulationResult';
 
 interface AssessmentHistoryProps {
     vehicleId: string;
     /** Changes whenever a new assessment completes, triggering a reload. */
     refreshKey: unknown;
     loadHistory: (vehicleId: string) => Promise<SimulationRecord[]>;
+    /** Reruns a saved request against the vehicle's current battery state. */
+    onRerun: (request: Required<SimulationRequest>) => void;
+    /** Why a rerun is not possible right now; null when it is. */
+    rerunBlocked: string | null;
 }
 
 type HistoryResult = { vehicleId: string } & (
@@ -15,8 +20,9 @@ type HistoryResult = { vehicleId: string } & (
 const MAX_ROWS = 10;
 const fmt = (value: number | undefined, unit: string) => value === undefined ? '—' : `${value}${unit}`;
 
-export function AssessmentHistory({ vehicleId, refreshKey, loadHistory }: AssessmentHistoryProps) {
+export function AssessmentHistory({ vehicleId, refreshKey, loadHistory, onRerun, rerunBlocked }: AssessmentHistoryProps) {
     const [result, setResult] = useState<HistoryResult | null>(null);
+    const [openId, setOpenId] = useState<string | null>(null);
     // Keep this vehicle's previous rows visible while it reloads; only a vehicle switch shows loading.
     const state = result && result.vehicleId === vehicleId ? result : { status: 'loading' as const };
 
@@ -41,6 +47,11 @@ export function AssessmentHistory({ vehicleId, refreshKey, loadHistory }: Assess
         return () => { cancelled = true; };
     }, [vehicleId, refreshKey, loadHistory]);
 
+    // A record that scrolled out of the newest rows, or another vehicle's, simply closes.
+    const opened = state.status === 'ready' ? state.records.find(record => record.id === openId) : undefined;
+    // The backend stores every request field with its default filled in.
+    const openedRequest = opened?.request as Required<SimulationRequest> | undefined;
+
     return (
         <section className="fleet-comparison" aria-label="Recent saved assessments">
             <div className="sim-result-header">
@@ -63,6 +74,7 @@ export function AssessmentHistory({ vehicleId, refreshKey, loadHistory }: Assess
                             <th scope="col">Arrival SOC / reserve</th>
                             <th scope="col">Confidence</th>
                             <th scope="col">Conditions</th>
+                            <th scope="col">Action</th>
                         </tr></thead>
                         <tbody>{state.records.map(({ id, timestamp, request, response }) => (
                             <tr key={id}>
@@ -76,10 +88,33 @@ export function AssessmentHistory({ vehicleId, refreshKey, loadHistory }: Assess
                                     {fmt(request.route_distance_km, ' km')} · ↑{fmt(request.elevation_gain_m, ' m')}
                                     {' '}↓{fmt(request.elevation_loss_m, ' m')} · {fmt(request.ambient_temp_c, '°C')}
                                 </td>
+                                <td><button type="button" className="ctrl-btn"
+                                    aria-expanded={id === openId}
+                                    aria-label={`${id === openId ? 'Close' : 'Open'} assessment saved ${new Date(timestamp).toLocaleString()}`}
+                                    onClick={() => setOpenId(id === openId ? null : id)}>
+                                    {id === openId ? 'Close' : 'Open'}
+                                </button></td>
                             </tr>
                         ))}</tbody>
                     </table>
                 </div>
+            )}
+            {opened && openedRequest && (
+                <SimulationResult
+                    assessment={{ request: openedRequest, response: opened.response, origin: 'backend' }}
+                    isOutdated={false}
+                >
+                    <div className="fleet-comparison">
+                        <div className="sim-result-header">
+                            <p>Saved {new Date(opened.timestamp).toLocaleString()} · A rerun uses the vehicle's current battery state and is saved as a new assessment.</p>
+                            <button type="button" className="ctrl-btn ctrl-btn--run" disabled={rerunBlocked !== null}
+                                onClick={() => { setOpenId(null); onRerun(openedRequest); }}>
+                                Rerun with these inputs
+                            </button>
+                        </div>
+                        {rerunBlocked && <p role="status">{rerunBlocked}</p>}
+                    </div>
+                </SimulationResult>
             )}
         </section>
     );

@@ -11,9 +11,10 @@ import { RouteInputs } from './components/RouteInputs';
 import type { RoutePreset } from './components/RouteInputs';
 import { SimulationResult } from './components/SimulationResult';
 import { FleetComparison } from './components/FleetComparison';
+import { ScenarioComparison } from './components/ScenarioComparison';
 import { AssessmentHistory } from './components/AssessmentHistory';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
-import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters } from '@fleet/api-client';
+import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationNumericDraft, SimulationNumericParameters, SimulationRequest } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
 import { ElevationChart } from './components/ElevationChart';
 import { ThermalMap } from './components/ThermalMap';
@@ -41,7 +42,7 @@ const PAGE_DESCRIPTIONS: Record<PageId, string> = {
     vehicles: 'Register vehicles and browse the fleet.',
     planner: 'Check whether a vehicle can finish a trip with its reserve intact.',
     route: 'Manila → Baguio example route via Marcos Highway, elevation profile and sample charging stops.',
-    battery: 'Illustrative pack temperature, health history and regen estimates.',
+    battery: 'Illustrative pack temperature and regen estimates, with reported SOH history.',
     garage: 'Browse the fleet in 3D and register new vehicles.',
 };
 
@@ -117,7 +118,7 @@ function buildThermalGrid(baseTempC: number, drivingStyle: DrivingStyle, progres
 
 // ──────────────────────────────────────────────────────────────────────────
 function App() {
-    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, getSimulationHistory, historyVersion, createVehicle, updateVehicle, deleteVehicle } = useFleetData();
+    const { vehicles, telemetry, assessment, loading, error, simulationError, dataStatus, readingTime, lastFetchedAt, isSimulating, runSimulation, runBatchSimulation, runScenarioComparison, getSimulationHistory, getVehicleHistory, historyVersion, createVehicle, updateVehicle, deleteVehicle } = useFleetData();
 
     const [requestedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const selectedVehicleId = vehicles.some(vehicle => vehicle.id === requestedVehicleId)
@@ -272,6 +273,26 @@ function App() {
         });
     };
 
+    // Reopen a saved run in the planner: the form shows its inputs, so the new result is not outdated.
+    const handleRerun = (request: Required<SimulationRequest>) => {
+        if (isSimulating) return;
+        setRouteValues({
+            route_distance_km: String(request.route_distance_km),
+            elevation_gain_m: String(request.elevation_gain_m),
+            elevation_loss_m: String(request.elevation_loss_m),
+            ambient_temp_c: String(request.ambient_temp_c),
+            payload_kg: String(request.payload_kg),
+            reserve_soc_target_pct: String(request.reserve_soc_target_pct),
+        });
+        setRoadType(request.road_type);
+        setDrivingStyle(request.driving_style);
+        setHvacMode(request.hvac_mode);
+        setRegenLevel(request.regen_level);
+        setSelectedVehicleId(request.vehicle_id);
+        window.location.hash = '#/planner';
+        void runSimulation(request);
+    };
+
     // The fleet starts empty; planner, route and battery need a vehicle to show anything real.
     // Vehicles, dashboard and garage render their own empty states.
     const content = !loading && vehicles.length === 0 && page !== 'vehicles' && page !== 'dashboard' && page !== 'garage'
@@ -307,6 +328,9 @@ function App() {
             vehicleId={selectedVehicleId}
             refreshKey={historyVersion}
             loadHistory={getSimulationHistory}
+            onRerun={handleRerun}
+            rerunBlocked={dataStatus !== 'live' ? 'Reconnect to the backend to rerun this assessment.'
+                : isSimulating ? 'A simulation is already running.' : null}
         />
     );
 
@@ -477,6 +501,17 @@ function App() {
                                     void runSimulation({ ...currentRequest, vehicle_id: vehicleId });
                                 }}
                             />
+                            <ScenarioComparison
+                                assessment={assessment}
+                                isOutdated={assessmentOutdated}
+                                isConnected={dataStatus === 'live'}
+                                runComparison={runScenarioComparison}
+                                onUseSetup={setup => {
+                                    setDrivingStyle(setup.driving_style);
+                                    setHvacMode(setup.hvac_mode);
+                                    setRegenLevel(setup.regen_level);
+                                }}
+                            />
                         </SimulationResult>
                     )}
                     <div className="page-card">{assessmentHistory}</div>
@@ -526,6 +561,9 @@ function App() {
                         <BatteryHealthChart
                             vehicles={vehicles}
                             selectedVehicleId={selectedVehicleId}
+                            isDemo={dataStatus === 'demo'}
+                            isConnected={dataStatus === 'live'}
+                            loadHistory={getVehicleHistory}
                         />
                         <RegenBrakingPanel
                             vehicles={vehicles}

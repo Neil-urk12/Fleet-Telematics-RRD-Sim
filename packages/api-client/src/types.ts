@@ -166,6 +166,25 @@ export interface BatchSimulationResponse {
   results: BatchSimulationResult[];
 }
 
+/** One named driving/HVAC/regen setup in a what-if comparison. */
+export interface SimulationConfig {
+  label: string;
+  hvac_mode?: HvacMode;
+  driving_style?: DrivingStyle;
+  regen_level?: RegenLevel;
+}
+
+/** Same vehicle and route, several setups; the backend needs at least two. */
+export interface CompareSimulationRequest
+  extends Omit<SimulationRequest, "hvac_mode" | "driving_style" | "regen_level"> {
+  configs: SimulationConfig[];
+}
+
+export interface CompareSimulationResponse {
+  vehicle_id: string;
+  results: { label: string; response: SimulationResponse }[];
+}
+
 /** Specifications captured from the vehicle used by an assessment. */
 export type SimulationVehicleProfile = Required<Pick<Vehicle,
   | "battery_capacity_kwh"
