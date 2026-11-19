@@ -16,7 +16,7 @@ import { ScenarioComparison } from './components/ScenarioComparison';
 import { DegradationOutlook } from './components/DegradationOutlook';
 import { DocsPage } from './components/DocsPage';
 import { AssessmentHistory } from './components/AssessmentHistory';
-import { AssessmentDetail } from './components/AssessmentDetail';
+import { AssessmentDetail, recordTrip } from './components/AssessmentDetail';
 import { formatReadingAge, isAssessmentOutdated, parseSimulationInputs } from '@fleet/api-client';
 import type { DrivingStyle, HvacMode, RegenLevel, RoadType, SimulationAssessment, SimulationNumericDraft, SimulationNumericParameters, SimulationRecord, SimulationRequest } from '@fleet/api-client';
 import { MapPanel } from './components/MapPanel';
@@ -130,8 +130,18 @@ function fitTripCurve({ request, response }: SimulationAssessment) {
     const { starting_soc_pct: start, projected_arrival_soc_pct: end } = response;
     return shape.map(p => {
         const used = totalKwh > 0 ? p.kwh / totalKwh : p.distance / ROUTE_DISTANCE_KM;
-        return { ...p, soc: Math.max(0, start + (end - start) * used) };
+        const soc = start + (end - start) * used;
+        return { ...p, soc: Math.max(0, soc), rawSoc: soc };
     });
+}
+
+// Route fraction where a trip's battery runs empty (the vehicle can go no further), or 1 if it arrives.
+function emptyFraction(curve: ReturnType<typeof fitTripCurve>) {
+    const i = curve.findIndex(p => p.rawSoc <= 0);
+    if (i < 0) return 1;
+    if (i === 0) return 0;
+    const a = curve[i - 1], b = curve[i];
+    return (a.distance + (b.distance - a.distance) * a.rawSoc / (a.rawSoc - b.rawSoc)) / ROUTE_DISTANCE_KM;
 }
 
 // Text for a replayed trip's chart note; negative arrival SOC reads as empty, as in the result.
@@ -196,13 +206,11 @@ function App() {
         return () => window.removeEventListener('hashchange', onHashChange);
     }, []);
     // The saved run whose replay is on screen: set once it has loaded and only if it is on the map's route.
-    const [replayId, setReplayId] = useState<string | null>(null);
+    const [replay, setReplay] = useState<SimulationRecord | null>(null);
     const handleRecordLoad = useCallback((record: SimulationRecord) => {
-        setReplayId(isMapRoute(record.request as Required<SimulationRequest>) ? record.id : null);
+        setReplay(isMapRoute(record.request as Required<SimulationRequest>) ? record : null);
     }, []);
-    // The preview only animates where it is visible, so other pages don't re-render every frame.
-    const isAnimating = isRunning
-        && (page === 'route' || page === 'battery' || (recordId !== null && replayId === recordId));
+    const replaying = recordId !== null && replay?.id === recordId;
 
     // Vehicle IDs that saved runs refer to; the garage never assigns one of them to a new vehicle.
     const [savedRunIds, setSavedRunIds] = useState<string[]>([]);
@@ -237,60 +245,6 @@ function App() {
         regen_level: regenLevel,
     } : null;
 
-    const lastTimeRef = useRef<number>(performance.now());
-
-    // ── Continuous Playback Loop ──────────────────────────────────────────
-    useEffect(() => {
-        let animFrameId: number;
-
-        const loop = (now: number) => {
-            const dt = (now - lastTimeRef.current) / 1000;
-            lastTimeRef.current = now;
-
-            if (isAnimating) {
-                setProgressFraction(prev => {
-                    // Full route takes ~60s at 1x speed
-                    const delta = (dt * speed) / 60;
-                    const next = prev + delta;
-                    return next >= 1 ? 0 : next;
-                });
-            }
-
-            animFrameId = requestAnimationFrame(loop);
-        };
-
-        lastTimeRef.current = performance.now();
-        animFrameId = requestAnimationFrame(loop);
-
-        return () => cancelAnimationFrame(animFrameId);
-    }, [isAnimating, speed]);
-
-    // ── Keyboard shortcuts ────────────────────────────────────────────────
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (page === 'garage') return; // the garage owns Escape / arrows / number keys
-            if (e.target instanceof HTMLElement &&
-                (e.target.matches('input, select, textarea, button, [role="button"]') || e.target.isContentEditable ||
-                    e.target.closest('.leaflet-container'))) return; // the focused map owns arrows/+/- for panning and zoom
-            if (e.code === 'Space') {
-                e.preventDefault();
-                setIsRunning(r => !r);
-            } else if (e.code === 'ArrowLeft') {
-                e.preventDefault();
-                setProgressFraction(p => Math.max(0, p - 0.05));
-            } else if (e.code === 'ArrowRight') {
-                e.preventDefault();
-                setProgressFraction(p => Math.min(1, p + 0.05));
-            } else if (e.key >= '1' && e.key <= '6') {
-                const idx = parseInt(e.key, 10) - 1;
-                if (vehicles[idx]) setSelectedVehicleId(vehicles[idx].id);
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [vehicles, page]);
-
     const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId) ?? vehicles[0];
     const activeVehicle = selectedVehicle ?? {
         id: 'EV-001',
@@ -324,9 +278,77 @@ function App() {
     const liveTrip = assessment && !assessmentOutdated
         && assessment.request.vehicle_id === selectedVehicleId && isMapRoute(assessment.request)
         ? assessment : null;
-    const routeSocData = useMemo(() => liveTrip ? fitTripCurve(liveTrip) : socData, [liveTrip, socData]);
+    const liveCurve = useMemo(() => liveTrip ? fitTripCurve(liveTrip) : null, [liveTrip]);
+    const routeSocData = liveCurve ?? socData;
+    const replayCurve = useMemo(() => replay ? fitTripCurve(recordTrip(replay)) : null, [replay]);
+    // A played trip that runs out of charge stops where its battery is empty.
+    const stopFraction = replaying && replayCurve ? emptyFraction(replayCurve)
+        : page === 'route' && liveCurve ? emptyFraction(liveCurve) : 1;
+    const progress = Math.min(progressFraction, stopFraction);
+    // The preview only animates where it is visible, so other pages don't re-render every frame.
+    // A trip that starts empty has nothing to play.
+    const isAnimating = isRunning && stopFraction > 0 && (page === 'route' || page === 'battery' || replaying);
+
+    // ── Keyboard shortcuts ────────────────────────────────────────────────
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (page === 'garage') return; // the garage owns Escape / arrows / number keys
+            if (e.target instanceof HTMLElement &&
+                (e.target.matches('input, select, textarea, button, [role="button"]') || e.target.isContentEditable ||
+                    e.target.closest('.leaflet-container'))) return; // the focused map owns arrows/+/- for panning and zoom
+            if (e.code === 'Space') {
+                e.preventDefault();
+                setIsRunning(r => !r);
+            } else if (e.code === 'ArrowLeft') {
+                e.preventDefault();
+                setProgressFraction(p => Math.max(0, Math.min(p, stopFraction) - 0.05));
+            } else if (e.code === 'ArrowRight') {
+                e.preventDefault();
+                setProgressFraction(p => Math.min(stopFraction, p + 0.05));
+            } else if (e.key >= '1' && e.key <= '6') {
+                const idx = parseInt(e.key, 10) - 1;
+                if (vehicles[idx]) setSelectedVehicleId(vehicles[idx].id);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [vehicles, page, stopFraction]);
     const previewSoc = page === 'route' && liveTrip
-        ? interpolateAtDistance(routeSocData, 'soc', progressFraction * ROUTE_DISTANCE_KM) : undefined;
+        ? interpolateAtDistance(routeSocData, 'soc', progress * ROUTE_DISTANCE_KM) : undefined;
+
+    const lastTimeRef = useRef<number>(performance.now());
+
+    // ── Continuous Playback Loop ──────────────────────────────────────────
+    useEffect(() => {
+        let animFrameId: number;
+
+        const loop = (now: number) => {
+            const dt = (now - lastTimeRef.current) / 1000;
+            lastTimeRef.current = now;
+
+            if (isAnimating) {
+                setProgressFraction(prev => {
+                    // Full route takes ~60s at 1x speed
+                    const delta = (dt * speed) / 60;
+                    const next = prev + delta;
+                    // Playing again from the empty point (or the end) restarts the trip.
+                    return prev >= stopFraction || next >= 1 ? 0 : Math.min(next, stopFraction);
+                });
+            }
+
+            animFrameId = requestAnimationFrame(loop);
+        };
+
+        lastTimeRef.current = performance.now();
+        animFrameId = requestAnimationFrame(loop);
+
+        return () => cancelAnimationFrame(animFrameId);
+    }, [isAnimating, speed, stopFraction]);
+    // Pause once the vehicle reaches the point where its battery ran out.
+    useEffect(() => {
+        if (stopFraction < 1 && progressFraction >= stopFraction) setIsRunning(false);
+    }, [progressFraction, stopFraction]);
     // Opens the route map at Manila and plays the live planner result.
     const playTrip = useCallback(() => {
         setProgressFraction(0);
@@ -408,7 +430,7 @@ function App() {
             dataStatus={dataStatus}
             selectedVehicleId={selectedVehicleId}
             selectedStationId={selectedStationId}
-            progressFraction={progressFraction}
+            progressFraction={progress}
             previewSoc={previewSoc}
             onSelectVehicle={setSelectedVehicleId}
             onSelectStation={setSelectedStationId}
@@ -434,7 +456,7 @@ function App() {
                 speed={speed}
                 onSpeedChange={setSpeed}
                 onReset={() => setProgressFraction(0)}
-                progressFraction={progressFraction}
+                progressFraction={progress}
                 onProgressChange={setProgressFraction}
                 routeDistanceKm={ROUTE_DISTANCE_KM}
             />
@@ -444,7 +466,7 @@ function App() {
     // A saved run played on the route map from its own result, not the vehicle's current state.
     const renderReplay = (trip: SimulationAssessment) => {
         if (!isMapRoute(trip.request)) return null;
-        const curve = fitTripCurve(trip); // ~140 points, cheap enough to rebuild each frame
+        const curve = replayCurve ?? fitTripCurve(trip);
         return <>
             {controlsBar}
             <div className="page-grid page-grid--route page-grid--replay">
@@ -454,8 +476,8 @@ function App() {
                     dataStatus={dataStatus}
                     selectedVehicleId={trip.request.vehicle_id}
                     selectedStationId={selectedStationId}
-                    progressFraction={progressFraction}
-                    previewSoc={interpolateAtDistance(curve, 'soc', progressFraction * ROUTE_DISTANCE_KM)}
+                    progressFraction={progress}
+                    previewSoc={interpolateAtDistance(curve, 'soc', progress * ROUTE_DISTANCE_KM)}
                     onSelectStation={setSelectedStationId}
                     onProgressChange={setProgressFraction}
                 />
@@ -463,7 +485,7 @@ function App() {
                     elevationData={ELEVATION_PROFILE}
                     socData={curve}
                     totalDistance={ROUTE_DISTANCE_KM}
-                    progressFraction={progressFraction}
+                    progressFraction={progress}
                     resultNote={tripNote('Saved run for', trip)}
                 />
             </div>
@@ -698,7 +720,7 @@ function App() {
                             elevationData={ELEVATION_PROFILE}
                             socData={routeSocData}
                             totalDistance={ROUTE_DISTANCE_KM}
-                            progressFraction={progressFraction}
+                            progressFraction={progress}
                             resultNote={liveTrip ? tripNote('Your Trip planner result for', liveTrip) : undefined}
                         />
                         <ChargingPanel

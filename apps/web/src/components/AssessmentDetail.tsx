@@ -20,6 +20,13 @@ type LoadResult = { recordId: string } & (
     | { status: 'error'; message: string }
     | { status: 'ready'; record: SimulationRecord });
 
+/** A saved run as an assessment; the backend stores every request field with its default filled in. */
+export const recordTrip = (record: SimulationRecord): SimulationAssessment => ({
+    request: record.request as Required<SimulationRequest>,
+    response: record.response,
+    origin: 'backend',
+});
+
 /** One saved assessment (`#/history/<id>`): its replay on the route map and its full result. */
 export function AssessmentDetail({ recordId, loadRecord, onLoad, onRerun, rerunBlocked, renderReplay }: AssessmentDetailProps) {
     const [result, setResult] = useState<LoadResult | null>(null);
@@ -56,12 +63,7 @@ export function AssessmentDetail({ recordId, loadRecord, onLoad, onRerun, rerunB
     }
 
     const { record } = state;
-    // The backend stores every request field with its default filled in.
-    const assessment: SimulationAssessment = {
-        request: record.request as Required<SimulationRequest>,
-        response: record.response,
-        origin: 'backend',
-    };
+    const assessment = recordTrip(record);
     const replay = renderReplay(assessment);
 
     return (

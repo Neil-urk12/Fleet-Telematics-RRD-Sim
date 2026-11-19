@@ -52,7 +52,8 @@ every listed capability exists in this repository.
   Route: playback controls, map, elevation/SOC, charging. A current planner result on the
   Manila → Baguio route (exact preset distance/ascent/descent) is replayed there: Simulate trip
   opens `#/route` and plays it, and the SOC curve keeps the backend's start and arrival SOC,
-  spread by the local estimate's cumulative energy. Battery: thermal, SOH history, regen
+  spread by the local estimate's cumulative energy. A trip whose SOC reaches 0 stops and pauses
+  where the battery runs empty; playing again restarts from Manila. Battery: thermal, SOH history, regen
   (`RegenBrakingPanel.tsx` shows the current planner result's recovered regen energy). `BatteryHealthChart.tsx` plots the selected vehicle's recorded SOH from
   `GET /api/vehicles/{id}/history`, reloading when its battery state timestamp changes; the
   fixed `EV-001`–`EV-006` example curves appear only in offline demo mode, labelled
