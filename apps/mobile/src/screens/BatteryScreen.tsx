@@ -199,6 +199,8 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
   const statusColor =
     maxTemp > 45 ? colors.accentRed : maxTemp > 40 ? colors.accentYellow : colors.accentGreen;
 
+  // The vehicle object is replaced on every poll; only its ID matters here.
+  const currentId = current?.id;
   // x is a 0–1 fraction of the chart width.
   const sohSeries = useMemo(() => {
     if (isDemo) {
@@ -211,16 +213,16 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
         };
       });
     }
-    if (!entries?.length || !current) return [];
+    if (!entries?.length || !currentId) return [];
     const first = Date.parse(entries[0].timestamp);
     const span = Date.parse(entries[entries.length - 1].timestamp) - first;
     return [{
-      id: current.id,
+      id: currentId,
       // A single reading (or readings sharing one timestamp) sits at the right edge.
       points: entries.map((e) => ({ x: span > 0 ? (Date.parse(e.timestamp) - first) / span : 1, soh: e.current_soh })),
       color: VEHICLE_COLORS[0],
     }];
-  }, [isDemo, vehicles, entries, current]);
+  }, [isDemo, vehicles, entries, currentId]);
 
   const xLabels = useMemo(() => {
     if (isDemo) return [...MONTHS];

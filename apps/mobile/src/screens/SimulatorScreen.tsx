@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Keyboard,
   Platform,
@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import type { ScrollViewInstance } from "react-native";
 import {
   formatBatteryState,
   isAssessmentOutdated,
@@ -101,6 +102,10 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
   const [history, setHistory] = useState<SimulationRecord[] | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [openRecordId, setOpenRecordId] = useState<string | null>(null);
+  // Bumped after runs the backend saves outside onRunSimulation (fleet and setup comparisons).
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const bumpHistory = () => setHistoryVersion((version) => version + 1);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const { parameters, errors } = parseSimulationInputs(values);
 
   const activeVehicle = selectedVehicle ?? vehicles[0] ?? null;
@@ -138,7 +143,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
       },
     );
     return () => { cancelled = true; };
-  }, [activeVehicle?.id, connected, assessment]);
+  }, [activeVehicle?.id, connected, assessment, historyVersion]);
 
   const handleSimulate = async () => {
     setShowErrors(true);
@@ -169,6 +174,8 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
     applySetup(request);
     setComparison(null);
     setOpenRecordId(null);
+    // The result renders above the list, so bring it into view.
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
     void onRunSimulation(request);
   };
 
@@ -189,6 +196,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
       setComparisonError(err instanceof Error ? err.message : "Fleet comparison failed");
     } finally {
       setIsComparing(false);
+      bumpHistory();
     }
   };
 
@@ -206,7 +214,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
     .sort((a, b) => (b.response?.projected_arrival_soc_pct ?? -Infinity) - (a.response?.projected_arrival_soc_pct ?? -Infinity));
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <Text style={styles.title}>Trip planner</Text>
       <Text style={styles.subtitle}>Check whether a vehicle can finish a trip with its reserve intact.</Text>
       {error ? <ErrorBanner message={error} onRetry={handleSimulate} /> : null}
@@ -361,7 +369,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
 
       {assessment?.origin === "backend" ? (
         <>
-          <SetupComparison assessment={assessment} isOutdated={isOutdated} connected={connected} onUseSetup={applySetup} />
+          <SetupComparison assessment={assessment} isOutdated={isOutdated} connected={connected} onUseSetup={applySetup} onSaved={bumpHistory} />
           <AgeingOutlook assessment={assessment} isOutdated={isOutdated} connected={connected} />
         </>
       ) : null}
@@ -378,35 +386,35 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
           // The backend stores every request field with its default filled in.
           const request = record.request as Required<SimulationRequest>;
           return (
-          <View key={record.id} style={styles.historyRow}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityState={{ expanded: open }}
-              onPress={() => setOpenRecordId(open ? null : record.id)}
-            >
-            <Text style={styles.label}>{open ? "▾" : "▸"} {new Date(record.timestamp).toLocaleString()}</Text>
-            <Text style={styles.hint}>
-              {record.response.risk_level.replaceAll("_", " ")} · {record.response.projected_arrival_soc_pct.toFixed(1)}% / {record.request.reserve_soc_target_pct ?? "—"}% · {record.response.confidence_score_pct.toFixed(0)}%
-            </Text>
-            <Text style={styles.hint}>
-              {record.request.route_distance_km} km · ↑{record.request.elevation_gain_m ?? "—"} m ↓{record.request.elevation_loss_m ?? "—"} m · {record.request.ambient_temp_c ?? "—"}°C
-            </Text>
-            </TouchableOpacity>
-            {open ? (
-              <View>
-                <Text style={styles.hint}>Saved result, as assessed at the time. Values do not change with the vehicle's current state.</Text>
-                <SimulationResult assessment={{ request, response: record.response, origin: "backend" }} isOutdated={false} />
-                <Text style={styles.hint}>A rerun uses the vehicle's current battery state and is saved as a new assessment.</Text>
-                <TouchableOpacity
-                  style={[styles.secondary, (loading || !connected) && styles.runOff]}
-                  disabled={loading || !connected}
-                  onPress={() => handleRerun(request)}
-                >
-                  <Text style={styles.secondaryText}>Rerun with these inputs</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-          </View>
+            <View key={record.id} style={styles.historyRow}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ expanded: open }}
+                onPress={() => setOpenRecordId(open ? null : record.id)}
+              >
+                <Text style={styles.label}>{open ? "▾" : "▸"} {new Date(record.timestamp).toLocaleString()}</Text>
+                <Text style={styles.hint}>
+                  {record.response.risk_level.replaceAll("_", " ")} · {record.response.projected_arrival_soc_pct.toFixed(1)}% / {record.request.reserve_soc_target_pct ?? "—"}% · {record.response.confidence_score_pct.toFixed(0)}%
+                </Text>
+                <Text style={styles.hint}>
+                  {record.request.route_distance_km} km · ↑{record.request.elevation_gain_m ?? "—"} m ↓{record.request.elevation_loss_m ?? "—"} m · {record.request.ambient_temp_c ?? "—"}°C
+                </Text>
+              </TouchableOpacity>
+              {open ? (
+                <View>
+                  <Text style={styles.hint}>Saved result, as assessed at the time. Values do not change with the vehicle's current state.</Text>
+                  <SimulationResult assessment={{ request, response: record.response, origin: "backend" }} isOutdated={false} />
+                  <Text style={styles.hint}>A rerun uses the vehicle's current battery state and is saved as a new assessment.</Text>
+                  <TouchableOpacity
+                    style={[styles.secondary, (loading || !connected) && styles.runOff]}
+                    disabled={loading || !connected}
+                    onPress={() => handleRerun(request)}
+                  >
+                    <Text style={styles.secondaryText}>Rerun with these inputs</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
           );
         })}
       </View>
@@ -429,7 +437,11 @@ interface ExtraCardProps {
 }
 
 /** Same vehicle and route under other driving/HVAC/regen setups (POST /api/simulation/compare). */
-function SetupComparison({ assessment, isOutdated, connected, onUseSetup }: ExtraCardProps & { onUseSetup: (setup: Setup) => void }) {
+function SetupComparison({ assessment, isOutdated, connected, onUseSetup, onSaved }: ExtraCardProps & {
+  onUseSetup: (setup: Setup) => void;
+  /** The backend saves every compared setup, so the saved-runs list reloads. */
+  onSaved: () => void;
+}) {
   // Kept with the assessment it was run for, so a new assessment clears it.
   const [result, setResult] = useState<{ assessment: SimulationAssessment; setups: Required<Setup>[]; response: CompareSimulationResponse } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -453,6 +465,7 @@ function SetupComparison({ assessment, isOutdated, connected, onUseSetup }: Extr
       setError(err instanceof Error ? err.message : "Setup comparison failed");
     } finally {
       setBusy(false);
+      onSaved();
     }
   };
 
