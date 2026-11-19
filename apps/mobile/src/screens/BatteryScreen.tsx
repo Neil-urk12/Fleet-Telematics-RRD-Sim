@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -7,18 +7,24 @@ import {
   View,
 } from "react-native";
 import { formatBatteryHistory } from "@fleet/api-client";
-import type { Vehicle } from "@fleet/api-client";
+import type { Vehicle, VehicleHistoryEntry } from "@fleet/api-client";
 import { colors } from "../constants/theme";
+import { client } from "../config/api";
 
 interface BatteryScreenProps {
   vehicles: Vehicle[];
   selectedVehicle: Vehicle | null;
   onSelectVehicle: (vehicle: Vehicle) => void;
   onNavigateTab?: (tab: any) => void;
+  /** "demo" shows the fixed example curves; otherwise the selected vehicle's recorded SOH history. */
+  dataStatus: "demo" | "live" | "cached";
 }
 
+type HistoryResult = { vehicleId: string } & (
+  | { status: "error"; message: string }
+  | { status: "ready"; entries: VehicleHistoryEntry[] });
+
 const MONTHS = ["MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP"] as const;
-const SOH_Y_TICKS = [84, 88, 92, 96, 100];
 const SOH_MIN = 82;
 const SOH_MAX = 100;
 const VEHICLE_COLORS = ["#00c2ff", "#10b981", "#f59e0b", "#a78bfa", "#ef4444", "#f97316"];
@@ -146,8 +152,35 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
   selectedVehicle,
   onSelectVehicle,
   onNavigateTab,
+  dataStatus,
 }) => {
   const current = selectedVehicle ?? vehicles[0] ?? null;
+  const isDemo = dataStatus === "demo";
+  const [historyResult, setHistoryResult] = useState<HistoryResult | null>(null);
+  // Keep this vehicle's previous line visible while it reloads; only a vehicle switch shows loading.
+  const history = !isDemo && historyResult && historyResult.vehicleId === current?.id ? historyResult : null;
+  const entries = history?.status === "ready" ? history.entries : null;
+
+  useEffect(() => {
+    const vehicleId = current?.id;
+    if (dataStatus !== "live" || !vehicleId) return;
+    let cancelled = false;
+    // shortcut: fetches the full history on every battery update, add a backend limit if histories grow long
+    client.getVehicleHistory(vehicleId).then(
+      (loaded) => {
+        if (cancelled) return;
+        const sorted = [...loaded].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+        setHistoryResult({ vehicleId, status: "ready", entries: sorted });
+      },
+      (err) => {
+        if (!cancelled) setHistoryResult({
+          vehicleId, status: "error", message: err instanceof Error ? err.message : "Request failed",
+        });
+      },
+    );
+    return () => { cancelled = true; };
+    // Status-only edits add a history entry without moving the battery state timestamp.
+  }, [dataStatus, current?.id, current?.state_timestamp, current?.status]);
   const [pressedCell, setPressedCell] = useState<{
     row: number;
     col: number;
@@ -166,15 +199,46 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
   const statusColor =
     maxTemp > 45 ? colors.accentRed : maxTemp > 40 ? colors.accentYellow : colors.accentGreen;
 
-  const sohSeries = useMemo(
-    () =>
-      vehicles.slice(0, 6).map((vehicle, index) => ({
-        vehicle,
-        history: sohHistoryFor(vehicle),
-        color: VEHICLE_COLORS[index % VEHICLE_COLORS.length],
-      })),
-    [vehicles]
-  );
+  // x is a 0–1 fraction of the chart width.
+  const sohSeries = useMemo(() => {
+    if (isDemo) {
+      return vehicles.slice(0, 6).map((vehicle, index) => {
+        const demo = sohHistoryFor(vehicle);
+        return {
+          id: vehicle.id,
+          points: demo.map((soh, i) => ({ x: i / (demo.length - 1), soh })),
+          color: VEHICLE_COLORS[index % VEHICLE_COLORS.length],
+        };
+      });
+    }
+    if (!entries?.length || !current) return [];
+    const first = Date.parse(entries[0].timestamp);
+    const span = Date.parse(entries[entries.length - 1].timestamp) - first;
+    return [{
+      id: current.id,
+      // A single reading (or readings sharing one timestamp) sits at the right edge.
+      points: entries.map((e) => ({ x: span > 0 ? (Date.parse(e.timestamp) - first) / span : 1, soh: e.current_soh })),
+      color: VEHICLE_COLORS[0],
+    }];
+  }, [isDemo, vehicles, entries, current]);
+
+  const xLabels = useMemo(() => {
+    if (isDemo) return [...MONTHS];
+    if (!entries?.length) return [];
+    const first = new Date(entries[0].timestamp);
+    const last = new Date(entries[entries.length - 1].timestamp);
+    if (first.getTime() === last.getTime()) return ["", first.toLocaleDateString()];
+    // Readings within one day are told apart by time of day.
+    const byTime = first.toDateString() === last.toDateString();
+    const label = (date: Date) => byTime
+      ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : date.toLocaleDateString();
+    return [label(first), label(last)];
+  }, [isDemo, entries]);
+
+  // Grid keeps the lowest reading on the chart; the demo range stays 82–100%.
+  const lowestSoh = Math.min(SOH_MIN + 2, ...sohSeries.flatMap((s) => s.points.map((p) => p.soh)));
+  const sohMin = Math.min(SOH_MIN, Math.floor(lowestSoh) - 2);
+  const sohTicks = [0, 1, 2, 3, 4].map((i) => Math.round(SOH_MAX - (i * (SOH_MAX - sohMin)) / 4.5));
 
   const regenData = useMemo(
     () =>
@@ -213,9 +277,9 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
 
   const chartInnerWidth = Math.max(0, chartWidth - 36 - 78);
   const chartHeight = 168;
-  const xAt = (i: number) => 36 + (chartInnerWidth * i) / (MONTHS.length - 1);
+  const xAt = (fraction: number) => 36 + chartInnerWidth * fraction;
   const yAt = (soh: number) =>
-    8 + ((SOH_MAX - soh) / (SOH_MAX - SOH_MIN)) * (chartHeight - 28);
+    8 + ((SOH_MAX - soh) / (SOH_MAX - sohMin)) * (chartHeight - 28);
 
   return (
     <ScrollView
@@ -227,7 +291,9 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
         <View style={styles.pageHeaderText}>
           <Text style={styles.headerTitle}>Battery</Text>
           <Text style={styles.headerSubtitle}>
-            Illustrative pack temperature, health history and regen estimates.
+            {isDemo
+              ? "Illustrative pack temperature, health history and regen estimates."
+              : "Recorded health history with illustrative pack temperature and regen estimates."}
           </Text>
         </View>
       </View>
@@ -358,20 +424,49 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
 
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>DEMO SOH HISTORY — 7 MONTHS</Text>
-          <Text style={[styles.panelBadge, { color: colors.accentYellow }]}>
-            ILLUSTRATIVE TRENDS
+          <Text style={styles.panelTitle}>
+            {isDemo ? "DEMO SOH HISTORY — 7 MONTHS" : `SOH HISTORY · ${current.id}`}
+          </Text>
+          <Text style={[styles.panelBadge, { color: isDemo ? colors.accentYellow : colors.accentGreen }]}>
+            {isDemo ? "ILLUSTRATIVE TRENDS" : "REPORTED"}
           </Text>
         </View>
-        <Text style={styles.dataNote}>
-          Fixed example history. Current SOH and reading age appear in the fleet list.
-        </Text>
+        {isDemo ? (
+          <Text style={styles.dataNote}>
+            Fixed example history. Current SOH and reading age appear in the fleet list.
+          </Text>
+        ) : null}
+        {!isDemo && !history ? (
+          <Text style={styles.dataNote} accessibilityRole="text">
+            {dataStatus === "live" ? "Loading SOH history…" : "Reconnect to the backend to load SOH history."}
+          </Text>
+        ) : null}
+        {history?.status === "error" ? (
+          <Text style={[styles.dataNote, { color: colors.errorText }]} accessibilityRole="alert">
+            SOH history unavailable: {history.message}
+          </Text>
+        ) : null}
+        {entries ? (
+          <Text style={styles.dataNote}>
+            {entries.length === 0
+              ? "No SOH readings recorded for this vehicle yet."
+              : entries.length === 1
+                ? "Only one reading so far. A trend line appears after the next battery update."
+                : `${entries.length} readings recorded at registration, manual battery or status edits, and telemetry.`}
+          </Text>
+        ) : null}
 
         <View
           style={[styles.sohChart, { height: chartHeight }]}
           onLayout={(event) => setChartWidth(event.nativeEvent.layout.width)}
+          accessible
+          accessibilityLabel={isDemo
+            ? "Illustrative SOH trends for the demo fleet"
+            : entries?.length
+              ? `${current.id} SOH from ${entries[0].current_soh.toFixed(1)}% to ${entries[entries.length - 1].current_soh.toFixed(1)}% over ${entries.length} recorded readings`
+              : "SOH history chart, no data"}
         >
-          {SOH_Y_TICKS.map((tick) => (
+          {sohTicks.map((tick) => (
             <View key={tick} style={[styles.sohGridRow, { top: yAt(tick) }]}>
               <Text style={styles.sohYLabel}>{tick}%</Text>
               <View style={styles.sohGridLine} />
@@ -382,30 +477,31 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
             <Text style={styles.sohWarnLabel}>90% SOH THRESHOLD</Text>
           </View>
           {chartInnerWidth > 0
-            ? sohSeries.map(({ vehicle, history, color }) => {
-                const selected = vehicle.id === current.id;
+            ? sohSeries.map(({ id, points, color }) => {
+                const selected = id === current.id;
                 const stroke = selected ? colors.accentCyan : color;
+                const last = points[points.length - 1];
                 return (
-                  <View key={vehicle.id} style={StyleSheet.absoluteFill} pointerEvents="none">
-                    {history.slice(1).map((soh, index) => (
+                  <View key={id} style={StyleSheet.absoluteFill} pointerEvents="none">
+                    {points.slice(1).map((point, index) => (
                       <LineSegment
-                        key={`${vehicle.id}-${index}`}
-                        x1={xAt(index)}
-                        y1={yAt(history[index])}
-                        x2={xAt(index + 1)}
-                        y2={yAt(soh)}
+                        key={`${id}-${index}`}
+                        x1={xAt(points[index].x)}
+                        y1={yAt(points[index].soh)}
+                        x2={xAt(point.x)}
+                        y2={yAt(point.soh)}
                         color={stroke}
                         thickness={selected ? 2.5 : 1.5}
                       />
                     ))}
-                    {history.map((soh, index) => (
+                    {points.map((point, index) => (
                       <View
-                        key={`${vehicle.id}-dot-${index}`}
+                        key={`${id}-dot-${index}`}
                         style={[
                           styles.sohDot,
                           {
-                            left: xAt(index) - (selected ? 4 : 3),
-                            top: yAt(soh) - (selected ? 4 : 3),
+                            left: xAt(point.x) - (selected ? 4 : 3),
+                            top: yAt(point.soh) - (selected ? 4 : 3),
                             width: selected ? 8 : 6,
                             height: selected ? 8 : 6,
                             borderRadius: selected ? 4 : 3,
@@ -419,23 +515,23 @@ export const BatteryScreen: React.FC<BatteryScreenProps> = ({
                       style={[
                         styles.sohEndLabel,
                         {
-                          left: xAt(history.length - 1) + 6,
-                          top: yAt(history[history.length - 1]) - 7,
+                          left: xAt(last.x) + 6,
+                          top: yAt(last.soh) - 7,
                           color: stroke,
                           fontWeight: selected ? "700" : "500",
                         },
                       ]}
                     >
-                      {vehicle.id} {history[history.length - 1].toFixed(1)}%
+                      {id} {last.soh.toFixed(1)}%
                     </Text>
                   </View>
                 );
               })
             : null}
           <View style={styles.sohMonths}>
-            {MONTHS.map((month) => (
-              <Text key={month} style={styles.sohMonth}>
-                {month}
+            {xLabels.map((label, index) => (
+              <Text key={`${index}-${label}`} style={styles.sohMonth}>
+                {label}
               </Text>
             ))}
           </View>

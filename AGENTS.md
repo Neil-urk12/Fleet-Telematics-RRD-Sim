@@ -79,7 +79,10 @@ every listed capability exists in this repository.
   `MapPanel.tsx`, the elevation chart, the example trip, and the sample charging stations.
 - `apps/mobile/` — React Native / Expo SDK 57. `App.tsx` handles backend access and an
   offline simulation approximation; `src/screens/` contains dashboard, fleet,
-  simulator, alerts, and more screens. Read `apps/mobile/AGENTS.md` before editing.
+  simulator, alerts, and more screens. The simulator mirrors the web planner's setup comparison,
+  battery ageing outlook and saved runs (tap to expand, rerun with current battery state); the
+  battery screen plots the selected vehicle's recorded SOH history when live and the example
+  curves only in demo mode. Read `apps/mobile/AGENTS.md` before editing.
 - `packages/api-client/` — Shared TypeScript types, typed HTTP client, and numeric
   route-input parsing/validation in `src/`. `check-*.mjs` are standalone
   `node:assert` checks for the shared client (reading age, fleet comparison, battery

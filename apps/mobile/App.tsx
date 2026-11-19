@@ -262,6 +262,7 @@ export default function App() {
               selectedVehicle={selectedVehicle}
               onSelectVehicle={setSelectedVehicle}
               onNavigateTab={setCurrentTab}
+              dataStatus={dataStatus}
             />
           )}
 

@@ -17,6 +17,8 @@ import {
 } from "@fleet/api-client";
 import type {
   BatchSimulationResponse,
+  CompareSimulationResponse,
+  DegradationResponse,
   DrivingStyle,
   HvacMode,
   RegenLevel,
@@ -98,6 +100,7 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [history, setHistory] = useState<SimulationRecord[] | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [openRecordId, setOpenRecordId] = useState<string | null>(null);
   const { parameters, errors } = parseSimulationInputs(values);
 
   const activeVehicle = selectedVehicle ?? vehicles[0] ?? null;
@@ -143,6 +146,30 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
     Keyboard.dismiss();
     setComparison(null);
     await onRunSimulation(currentRequest);
+  };
+
+  const applySetup = (setup: Setup) => {
+    setDrivingStyle(setup.driving_style);
+    setHvacMode(setup.hvac_mode);
+    setRegenLevel(setup.regen_level);
+  };
+
+  // Loads a saved run into the form and assesses it against the vehicle's current battery state.
+  const handleRerun = (request: Required<SimulationRequest>) => {
+    if (loading) return;
+    setValues({
+      route_distance_km: String(request.route_distance_km),
+      elevation_gain_m: String(request.elevation_gain_m),
+      elevation_loss_m: String(request.elevation_loss_m),
+      ambient_temp_c: String(request.ambient_temp_c),
+      payload_kg: String(request.payload_kg),
+      reserve_soc_target_pct: String(request.reserve_soc_target_pct),
+    });
+    setRoadType(request.road_type);
+    applySetup(request);
+    setComparison(null);
+    setOpenRecordId(null);
+    void onRunSimulation(request);
   };
 
   const handleCompare = async () => {
@@ -332,27 +359,193 @@ export const SimulatorScreen: React.FC<SimulatorScreenProps> = ({
         </View>
       ) : null}
 
+      {assessment?.origin === "backend" ? (
+        <>
+          <SetupComparison assessment={assessment} isOutdated={isOutdated} connected={connected} onUseSetup={applySetup} />
+          <AgeingOutlook assessment={assessment} isOutdated={isOutdated} connected={connected} />
+        </>
+      ) : null}
+
       <View style={styles.card}>
         <Text style={styles.heading}>Recent assessments · {activeVehicle.id}</Text>
+        {history?.length ? <Text style={styles.hint}>Tap an assessment to see its full saved result.</Text> : null}
         {!connected ? <Text style={styles.hint}>Saved assessments unavailable until the backend is connected.</Text> : null}
         {historyError ? <Text style={styles.error}>Saved assessments unavailable: {historyError}</Text> : null}
         {connected && !history && !historyError ? <Text style={styles.hint}>Loading saved assessments…</Text> : null}
         {history && history.length === 0 ? <Text style={styles.hint}>No saved assessments for this vehicle yet.</Text> : null}
-        {history?.map((record) => (
+        {history?.map((record) => {
+          const open = record.id === openRecordId;
+          // The backend stores every request field with its default filled in.
+          const request = record.request as Required<SimulationRequest>;
+          return (
           <View key={record.id} style={styles.historyRow}>
-            <Text style={styles.label}>{new Date(record.timestamp).toLocaleString()}</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded: open }}
+              onPress={() => setOpenRecordId(open ? null : record.id)}
+            >
+            <Text style={styles.label}>{open ? "▾" : "▸"} {new Date(record.timestamp).toLocaleString()}</Text>
             <Text style={styles.hint}>
               {record.response.risk_level.replaceAll("_", " ")} · {record.response.projected_arrival_soc_pct.toFixed(1)}% / {record.request.reserve_soc_target_pct ?? "—"}% · {record.response.confidence_score_pct.toFixed(0)}%
             </Text>
             <Text style={styles.hint}>
               {record.request.route_distance_km} km · ↑{record.request.elevation_gain_m ?? "—"} m ↓{record.request.elevation_loss_m ?? "—"} m · {record.request.ambient_temp_c ?? "—"}°C
             </Text>
+            </TouchableOpacity>
+            {open ? (
+              <View>
+                <Text style={styles.hint}>Saved result, as assessed at the time. Values do not change with the vehicle's current state.</Text>
+                <SimulationResult assessment={{ request, response: record.response, origin: "backend" }} isOutdated={false} />
+                <Text style={styles.hint}>A rerun uses the vehicle's current battery state and is saved as a new assessment.</Text>
+                <TouchableOpacity
+                  style={[styles.secondary, (loading || !connected) && styles.runOff]}
+                  disabled={loading || !connected}
+                  onPress={() => handleRerun(request)}
+                >
+                  <Text style={styles.secondaryText}>Rerun with these inputs</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
-        ))}
+          );
+        })}
       </View>
     </ScrollView>
   );
 };
+
+type Setup = { label?: string; driving_style: DrivingStyle; hvac_mode: HvacMode; regen_level: RegenLevel };
+
+const SETUP_PRESETS: Required<Setup>[] = [
+  { label: "Efficient", driving_style: "ECO", hvac_mode: "OFF", regen_level: "HIGH" },
+  { label: "Comfort", driving_style: "NORMAL", hvac_mode: "HIGH", regen_level: "MEDIUM" },
+  { label: "Hard driving", driving_style: "AGGRESSIVE", hvac_mode: "HIGH", regen_level: "LOW" },
+];
+
+interface ExtraCardProps {
+  assessment: SimulationAssessment;
+  isOutdated: boolean;
+  connected: boolean;
+}
+
+/** Same vehicle and route under other driving/HVAC/regen setups (POST /api/simulation/compare). */
+function SetupComparison({ assessment, isOutdated, connected, onUseSetup }: ExtraCardProps & { onUseSetup: (setup: Setup) => void }) {
+  // Kept with the assessment it was run for, so a new assessment clears it.
+  const [result, setResult] = useState<{ assessment: SimulationAssessment; setups: Required<Setup>[]; response: CompareSimulationResponse } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const reserve = assessment.request.reserve_soc_target_pct;
+  const disabled = busy || isOutdated || !connected;
+
+  const handleCompare = async () => {
+    if (disabled) return;
+    const { driving_style, hvac_mode, regen_level, ...route } = assessment.request;
+    const setups = [
+      { label: "As submitted", driving_style, hvac_mode, regen_level },
+      ...SETUP_PRESETS.filter((p) => p.driving_style !== driving_style || p.hvac_mode !== hvac_mode || p.regen_level !== regen_level),
+    ];
+    setBusy(true);
+    setResult(null);
+    setError(null);
+    try {
+      setResult({ assessment, setups, response: await client.compareSimulations({ ...route, configs: setups }) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Setup comparison failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // The backend returns one result per config, in the order sent.
+  const rows = result?.assessment === assessment
+    ? result.response.results.flatMap(({ response }, index) => {
+        const setup = result.setups[index];
+        return setup ? [{ setup, response }] : [];
+      }).sort((a, b) => b.response.projected_arrival_soc_pct - a.response.projected_arrival_soc_pct)
+    : [];
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.heading}>Compare driving setups</Text>
+      <Text style={styles.hint}>Same vehicle and route · {reserve}% arrival reserve · Each setup is saved as an assessment.</Text>
+      {isOutdated ? <Text style={styles.hint}>Assess the current inputs and vehicle again before comparing.</Text> : null}
+      {!connected ? <Text style={styles.hint}>Reconnect to the backend to compare setups.</Text> : null}
+      <TouchableOpacity style={[styles.secondary, disabled && styles.runOff]} disabled={disabled} onPress={handleCompare}>
+        <Text style={styles.secondaryText}>{busy ? "Comparing…" : "Compare driving setups"}</Text>
+      </TouchableOpacity>
+      {error ? <Text style={styles.error}>Comparison unavailable: {error}</Text> : null}
+      {rows.length ? <Text style={styles.hint}>Backend assessments · Heuristic PoC model · Sorted by highest arrival SOC</Text> : null}
+      {rows.map(({ setup, response }) => (
+        <View key={setup.label} style={styles.historyRow}>
+          <Text style={styles.label}>{setup.label}</Text>
+          <Text style={styles.hint}>Driving {setup.driving_style} · HVAC {setup.hvac_mode} · Regen {setup.regen_level}</Text>
+          <Text style={styles.hint}>
+            {response.risk_level.replaceAll("_", " ")} · arrival {response.projected_arrival_soc_pct.toFixed(1)}% · margin {(response.projected_arrival_soc_pct - reserve).toFixed(1)} pp · {response.estimated_energy_consumption_kwh.toFixed(2)} kWh
+          </Text>
+          <TouchableOpacity accessibilityLabel={`Use the ${setup.label} setup in the trip form`} onPress={() => onUseSetup(setup)}>
+            <Text style={styles.link}>Use this setup</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** The trip rerun at the SOH projected for later years (POST /api/simulation/degradation; nothing saved). */
+function AgeingOutlook({ assessment, isOutdated, connected }: ExtraCardProps) {
+  const [result, setResult] = useState<{ assessment: SimulationAssessment; response: DegradationResponse } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const reserve = assessment.request.reserve_soc_target_pct;
+  const disabled = busy || isOutdated || !connected;
+  const projection = result?.assessment === assessment ? result.response : null;
+  const rate = projection && `${projection.soh_loss_pct_per_year.toFixed(1)}% SOH lost per year`;
+
+  const handleProject = async () => {
+    if (disabled) return;
+    setBusy(true);
+    setResult(null);
+    setError(null);
+    try {
+      setResult({ assessment, response: await client.projectDegradation(assessment.request) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Projection failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.heading}>Battery ageing outlook</Text>
+      <Text style={styles.hint}>Same trip and charge level at the battery health projected for later years · Not saved as assessments.</Text>
+      {isOutdated ? <Text style={styles.hint}>Assess the current inputs and vehicle again before projecting.</Text> : null}
+      {!connected ? <Text style={styles.hint}>Reconnect to the backend to project battery ageing.</Text> : null}
+      <TouchableOpacity style={[styles.secondary, disabled && styles.runOff]} disabled={disabled} onPress={handleProject}>
+        <Text style={styles.secondaryText}>{busy ? "Projecting…" : "Project battery ageing"}</Text>
+      </TouchableOpacity>
+      {error ? <Text style={styles.error}>Projection unavailable: {error}</Text> : null}
+      {projection ? (
+        <Text style={styles.hint}>
+          {projection.basis === "RECORDED"
+            ? `Recorded trend: ${rate}, fitted to ${projection.readings_used} readings over ${projection.span_days.toFixed(0)} days`
+            : `Assumed rate: ${rate} (illustrative; under 30 days of recorded SOH history)`}
+          {" · Heuristic PoC projection"}
+        </Text>
+      ) : null}
+      {projection?.points.map((point) => (
+        <View key={point.years_ahead} style={styles.historyRow}>
+          <Text style={styles.label}>
+            {point.years_ahead === 0 ? "Today" : `In ${point.years_ahead} year${point.years_ahead === 1 ? "" : "s"}`} · SOH {point.projected_soh_pct.toFixed(1)}%
+          </Text>
+          <Text style={styles.hint}>
+            {point.risk_level.replaceAll("_", " ")} · arrival {point.projected_arrival_soc_pct.toFixed(1)}% · margin {(point.projected_arrival_soc_pct - reserve).toFixed(1)} pp · range {point.predicted_range_km.toFixed(0)} km
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function ChoiceRow<T extends string>({
   label, hint, options, value, onChange,
